@@ -85,7 +85,7 @@ CAs são referenciados pelo contrato original, sem reescrita: [CA01, CA02, CA03,
 
 [Decisões D1, D2 e D3](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia): aplicam-se as decisões do card; D3 substitui requisito 7. A regra de parada do projeto continua no card; esta subentrega termina em PR pronto para revisão. Merge exige Bari APROVADO no head exato e check local. Publicação somente depois do merge.
 
-`npm run check`: oxlint, tsc -b, Vitest, build e Playwright. HOME falso obrigatório nesta execução. WebKit iPhone 15 testa manifest, metas, layout e persistência; Chromium mobile valida também SW ativo/escopo e reabertura offline. Playwright WebKit no Windows não suporta service workers; instalação real pelo menu do Safari e display-mode do app instalado exigem verificação posterior no iPhone. O teste confere display standalone no manifest, sem afirmar instalação real.
+`npm run check`: oxlint, tsc -b, Vitest, build e Playwright. HOME falso obrigatório nesta execução. WebKit iPhone 15 e Chromium mobile testam manifest, metas, layout, persistência, SW ativo/escopo e reabertura offline. Instalação real pelo menu do Safari e display-mode do app instalado exigem verificação posterior no iPhone. O teste confere display standalone no manifest, sem afirmar instalação real.
 
 ## Resultado
 

@@ -3,7 +3,7 @@ test("manifest, metas, layout e persistência", async ({
   page,
   context,
   baseURL,
-  browserName,
+
 }) => {
   const foreign: string[] = [];
   context.on("request", (r) => {
@@ -64,16 +64,6 @@ test("manifest, metas, layout e persistência", async ({
       .evaluate((el) => el.getBoundingClientRect().height),
   ).toBeGreaterThanOrEqual(44);
   expect(foreign).toEqual([]);
-  if (browserName === "webkit") {
-    test
-      .info()
-      .annotations.push({
-        type: "limitação",
-        description:
-          "Playwright WebKit no Windows não oferece service workers; offline validado em Chromium.",
-      });
-    return;
-  }
   await page.evaluate(async () => {
     const registration = await navigator.serviceWorker.ready;
     if (!registration.active) throw Error("SW inativo");
