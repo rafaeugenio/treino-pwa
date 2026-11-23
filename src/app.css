@@ -1,0 +1,25 @@
+﻿:root {
+  --font-inter: Arial, system-ui, sans-serif;
+}
+body {
+  margin: 0;
+  background: var(--color-background-full);
+}
+main {
+  box-sizing: border-box;
+  max-width: 40rem;
+  margin: auto;
+  min-height: 100dvh;
+  padding: max(24px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+}
+input,
+button {
+  min-height: 44px;
+  min-width: 44px;
+}
+* {
+  box-sizing: border-box;
+  min-width: 0;
+}
