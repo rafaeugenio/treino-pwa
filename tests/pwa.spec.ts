@@ -1,0 +1,95 @@
+import { test, expect } from "@playwright/test";
+test("manifest, metas, layout e persistência", async ({
+  page,
+  context,
+  baseURL,
+  browserName,
+}) => {
+  const foreign: string[] = [];
+  context.on("request", (r) => {
+    if (new URL(r.url()).origin !== new URL(baseURL!).origin)
+      foreign.push(r.url());
+  });
+  await page.goto("./");
+  const manifest = await (
+    await context.request.get("manifest.webmanifest")
+  ).json();
+  expect(manifest).toMatchObject({
+    name: "Treino pessoal",
+    short_name: "Treino",
+    start_url: "/treino-pwa/",
+    scope: "/treino-pwa/",
+    display: "standalone",
+    theme_color: "#18181b",
+    background_color: "#fafafa",
+  });
+  for (const icon of manifest.icons) {
+    expect(["192x192", "512x512"]).toContain(icon.sizes);
+    expect((await context.request.get(icon.src)).ok()).toBeTruthy();
+  }
+  expect(
+    manifest.icons.some((i: { purpose: string }) => i.purpose === "maskable"),
+  ).toBeTruthy();
+  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute(
+    "href",
+    "/treino-pwa/apple-touch-icon.png",
+  );
+  for (const name of [
+    "apple-mobile-web-app-capable",
+    "apple-mobile-web-app-status-bar-style",
+    "apple-mobile-web-app-title",
+    "theme-color",
+  ])
+    await expect(page.locator(`meta[name="${name}"]`)).toHaveAttribute(
+      "content",
+      /.+/,
+    );
+  await expect(page.locator('meta[name="viewport"]')).toHaveAttribute(
+    "content",
+    /viewport-fit=cover/,
+  );
+  await page.getByRole("textbox", { name: "Registro" }).fill("Flexões: 12");
+  await page.getByRole("button", { name: "Salvar treino" }).click();
+  await expect(page.getByTestId("record")).toHaveText("Flexões: 12");
+  await page.reload();
+  await expect(page.getByTestId("record")).toHaveText("Flexões: 12");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBeTruthy();
+  expect(
+    await page
+      .getByRole("button", { name: "Salvar treino" })
+      .evaluate((el) => el.getBoundingClientRect().height),
+  ).toBeGreaterThanOrEqual(44);
+  expect(foreign).toEqual([]);
+  if (browserName === "webkit") {
+    test
+      .info()
+      .annotations.push({
+        type: "limitação",
+        description:
+          "Playwright WebKit no Windows não oferece service workers; offline validado em Chromium.",
+      });
+    return;
+  }
+  await page.evaluate(async () => {
+    const registration = await navigator.serviceWorker.ready;
+    if (!registration.active) throw Error("SW inativo");
+    if (new URL(registration.scope).pathname !== "/treino-pwa/")
+      throw Error("escopo incorreto");
+  });
+  await page.reload();
+  await expect
+    .poll(() => page.evaluate(() => !!navigator.serviceWorker.controller))
+    .toBeTruthy();
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByTestId("record")).toHaveText("Flexões: 12");
+  await page.close();
+  const reopened = await context.newPage();
+  await reopened.goto(baseURL!);
+  await expect(reopened.getByTestId("record")).toHaveText("Flexões: 12");
+  expect(foreign).toEqual([]);
+});
