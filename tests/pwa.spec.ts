@@ -3,7 +3,6 @@ test("manifest, metas, layout e persistência", async ({
   page,
   context,
   baseURL,
-
 }) => {
   const foreign: string[] = [];
   context.on("request", (r) => {

@@ -54,7 +54,7 @@ Configuração adaptada da referência somente leitura: plugin React, alias @/, 
 
 localStorage contém somente o último registro demonstrativo na chave versionada treino-pwa:registro:v1. Falhas de gravação geram erro visível. Nenhuma API de dados ou host externo. Esta prova não implementa o registro completo de atividades da RAFA-181.
 
-vite-plugin-pwa/Workbox generateSW gera precache do shell versionado com base /treino-pwa/. O SW fica em espera nas atualizações, sem skipWaiting automático ou recarga durante edição. Novas versões assumem após fechar as abas; caches antigos são limpos na ativação. Isso evita misturar assets durante uma sessão. Manifest estático e ícones próprios incluem apple-touch 180, 192, 512 e maskable 512.
+vite-plugin-pwa/Workbox generateSW gera precache do shell versionado com base /treino-pwa/. O SW fica em espera nas atualizações, sem skipWaiting automático ou recarga durante edição. O botão Board UI Atualizar (mínimo 44 px) aparece quando há uma versão em espera e aplica a atualização ao toque; caches antigos são limpos na ativação. Isso evita misturar assets durante uma sessão. Manifest estático e ícones próprios incluem apple-touch 180, 192, 512 e maskable 512.
 
 ### Toolcraft
 
@@ -71,11 +71,11 @@ Starter gerado em diretório temporário com --no-skills. O npm interno falhou c
 | Utilitário cn | Inspecionado: clsx + twMerge; cx do Board UI já cobre com tipos compostos. |
 | Harness de checks | Acoplado ao editor; usados Vitest e Playwright voltados a esta PWA. |
 
-Dialkit ausente. D3 autoriza essa seleção sem forçar Toolcraft. O registro dos motivos fica neste SDD e no relatório; o brief proíbe comentários no Linear.
+Dialkit ausente. D3 autoriza essa seleção sem forçar Toolcraft. O registro dos motivos fica neste SDD e no card RAFA-180, onde foi registrado pelo Mochi.
 
 ### Publicação do Pages, somente após merge
 
-Executar `npm run publicar:pages` na main atualizada, em ambiente npm adequado. O script compila com /treino-pwa/, cria worktree temporário, comita dist e .nojekyll em gh-pages e faz push normal, sem force. Worktrees ficam preservados para inspeção/limpeza manual. Execuções posteriores partem de origin/gh-pages. Conflitos de push abortam.
+Somente após o APROVADO do Bari neste PR e merge: executar `npm run publicar:pages` com HOME falso e o mesmo node/npm do processo. Após `git fetch origin`, o script exige branch main, checkout limpo e SHAs main = origin/main. Executa `npm run check` e aborta se falhar; compila com base /treino-pwa/, publica dist e .nojekyll por push normal. Rejeições abortam. Em finally remove sua worktree sem --force e sua branch local publicacao-pages-*. Se a remoção falhar, informa o caminho para inspeção. Testes exercitam apenas origins bare locais em rafa180-pub-sandbox; nenhuma publicação real foi executada.
 
 Depois configurar no GitHub: Settings → Pages → Deploy from a branch → gh-pages → / (root). URL planejada: https://rafaeugenio.github.io/treino-pwa/. Nenhuma publicação ou configuração realizada neste PR. Actions sem cota; nenhum workflow criado.
 
@@ -90,3 +90,7 @@ CAs são referenciados pelo contrato original, sem reescrita: [CA01, CA02, CA03,
 ## Resultado
 
 Repo: https://github.com/rafaeugenio/treino-pwa. Pages: URL planejada acima, ainda não publicada. Check e PR: resultados finais no relatório do autor e na seção Verification do PR. Instalação Safari: Compartilhar → Adicionar à Tela de Início; abrir uma vez conectado antes de usar offline. Apagar os dados do site remove o registro local.
+
+### Rastreabilidade Board UI
+
+Componentes existentes gerados com boardui@0.5.9. Esta entrega reutiliza Button de components/base/buttons/button, sem regenerar componentes. Comandos de validação: npm run check (wrapper rafa180-autor-env.cmd com HOME falso).

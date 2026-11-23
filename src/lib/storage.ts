@@ -1,4 +1,4 @@
-﻿export const KEY = "treino-pwa:registro:v1";
+export const KEY = "treino-pwa:registro:v1";
 export function load(storage: Pick<Storage, "getItem">): string {
   return storage.getItem(KEY) ?? "";
 }

@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest";
 import { KEY, load, save } from "./storage";
 describe("registro local", () => {
   it("recupera um registro persistido por outra instância", () => {

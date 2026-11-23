@@ -1,4 +1,4 @@
-﻿# Treino
+# Treino
 
 PWA pessoal com dados somente neste dispositivo.
 
