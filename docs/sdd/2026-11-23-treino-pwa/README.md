@@ -75,7 +75,7 @@ Dialkit ausente. D3 autoriza essa seleção sem forçar Toolcraft. O registro do
 
 ### Publicação do Pages, somente após merge
 
-Somente após o APROVADO do Bari neste PR e merge: executar `npm run publicar:pages` com HOME falso e o mesmo node/npm do processo. Após `git fetch origin`, o script exige branch main, checkout limpo e SHAs main = origin/main. Executa `npm run check` e aborta se falhar; compila com base /treino-pwa/, publica dist e .nojekyll por push normal. Rejeições abortam. Em finally remove sua worktree sem --force e sua branch local publicacao-pages-*. Se a remoção falhar, informa o caminho para inspeção. Testes exercitam apenas origins bare locais em rafa180-pub-sandbox; nenhuma publicação real foi executada.
+Somente após o APROVADO do Bari neste PR e merge: executar `npm run publicar:pages` com HOME falso e o mesmo node/npm do processo. Após `git fetch origin`, o script exige branch main, checkout limpo e SHAs main = origin/main. Valida previamente a identidade efetiva (`git var GIT_AUTHOR_IDENT` e `GIT_COMMITTER_IDENT`); com HOME falso, configure sua identidade git local antes, sem depender do HOME habitual. Executa `npm run check`, aborta se falhar e reconfere o checkout limpo antes do build; compila com base /treino-pwa/, publica dist e .nojekyll por push normal. Rejeições abortam. Em finally limpa somente o conteúdo da worktree exclusiva que criou, restaura um commit conhecido no índice/disco e desanexa a branch antes de remover a worktree sem --force. Só apaga a ref publicacao-pages-* se existir (branch órfã ainda sem commit não tem ref). Cada etapa de limpeza é independente; falhas informam o caminho sem mascarar o erro original. Testes exercitam apenas origins bare locais em rafa180-pub-sandbox; nenhuma publicação real foi executada.
 
 Depois configurar no GitHub: Settings → Pages → Deploy from a branch → gh-pages → / (root). URL planejada: https://rafaeugenio.github.io/treino-pwa/. Nenhuma publicação ou configuração realizada neste PR. Actions sem cota; nenhum workflow criado.
 
@@ -94,3 +94,7 @@ Repo: https://github.com/rafaeugenio/treino-pwa. Pages: URL planejada acima, ain
 ### Rastreabilidade Board UI
 
 Componentes existentes gerados com boardui@0.5.9. Esta entrega reutiliza Button de components/base/buttons/button, sem regenerar componentes. Comandos de validação: npm run check (wrapper rafa180-autor-env.cmd com HOME falso).
+
+### Correções da revisão de publicação (F1–F4)
+
+Testes node incluem dist ausente, identidade ausente, hook de commit falho após cópia e check que suja checkout. Cada fixture criada é removida no fim. O sandbox padrão usa tmpdir(); nesta máquina, execute com $env:RAFA_PAGES_TEST_SANDBOX='C:\dev\Geral\tmp-harness\rafa180-pub-sandbox' antes do wrapper HOME falso. O teste SW gera o segundo build com configuração temporária e transformIndexHtml, sem reescrever index.html versionado, e remove seus builds temporários ao final.

@@ -1,9 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { createServer } from "node:http";
-import { readFileSync, writeFileSync, mkdtempSync, cpSync } from "node:fs";
-import { join, extname } from "node:path";
+import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync } from "node:fs";
+import { join, extname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 test("atualização por toque aplica o segundo build", async ({ page }) => {
   test.setTimeout(120_000);
@@ -31,11 +32,10 @@ test("atualização por toque aplica o segundo build", async ({ page }) => {
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => true));
     await page.reload();
     await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBeTruthy();
-    const original = readFileSync("index.html", "utf8");
-    try {
-      writeFileSync("index.html", original.replace(/<title>.*?<\/title>/, "<title>Treino versão nova</title>"));
-      execFileSync(process.execPath, ["node_modules/vite/bin/vite.js", "build", "--outDir", second], { stdio: "pipe" });
-    } finally { writeFileSync("index.html", original); }
+    const config = join(temp, "update.config.mjs");
+    writeFileSync(config, `import config from ${JSON.stringify(pathToFileURL(resolve("vite.config.ts")).href)};
+export default { ...config, plugins: [...config.plugins, { name: "test-update-title", transformIndexHtml: (html) => html.replace(new RegExp("<title>.*?</title>"), "<title>Treino versão nova</title>") }] };`);
+    execFileSync(process.execPath, ["node_modules/vite/bin/vite.js", "build", "--config", config, "--outDir", second], { stdio: "pipe" });
     active = second;
     await page.evaluate(async () => { await (await navigator.serviceWorker.ready).update(); });
     const update = page.getByRole("button", { name: "Atualizar", exact: true });
@@ -45,5 +45,8 @@ test("atualização por toque aplica o segundo build", async ({ page }) => {
     await update.click();
     await expect(page).toHaveTitle("Treino versão nova", { timeout: 30_000 });
     await expect(update).toHaveCount(0);
-  } finally { await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); }
+  } finally {
+    try { await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); }
+    finally { rmSync(temp, { recursive: true }); }
+  }
 });
