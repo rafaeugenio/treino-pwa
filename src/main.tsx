@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { useState } from "react";
+import { useRegisterSW } from "virtual:pwa-register/react";
 import { StatCards } from "@/components/application/dashboard/stat-cards";
 import { RiCheckLine } from "@remixicon/react";
 import { Button } from "@/components/base/buttons/button";
@@ -9,6 +10,7 @@ import { load, save } from "./lib/storage";
 import "@/styles/globals.css";
 import "./app.css";
 function App() {
+  const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW();
   const [record, setRecord] = useState(() => {
     try {
       return load(localStorage);
@@ -21,6 +23,11 @@ function App() {
   return (
     <main className="flex flex-col gap-6 text-text-primary">
       <h1 className="text-title-1-medium">Treino</h1>
+      {needRefresh && (
+        <Button className="min-h-11 min-w-11" onClick={() => void updateServiceWorker(true)}>
+          Atualizar
+        </Button>
+      )}
       <StatCards
         columns={1}
         stats={[
