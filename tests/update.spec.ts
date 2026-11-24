@@ -15,8 +15,7 @@ test("atualização por toque aplica o segundo build", async ({ page }) => {
   let active = first;
   const server = createServer((req, res) => {
     const pathname = new URL(req.url!, "http://localhost").pathname;
-    if (!pathname.startsWith("/treino-pwa/")) { res.writeHead(404).end(); return; }
-    const relative = pathname.slice("/treino-pwa/".length) || "index.html";
+    const relative = pathname.slice(1) || "index.html";
     if (relative.includes("..")) { res.writeHead(400).end(); return; }
     try {
       const body = readFileSync(join(active, relative));
@@ -26,7 +25,7 @@ test("atualização por toque aplica o segundo build", async ({ page }) => {
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as { port: number };
-  const url = `http://127.0.0.1:${address.port}/treino-pwa/`;
+  const url = `http://127.0.0.1:${address.port}/`;
   try {
     await page.goto(url);
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => true));

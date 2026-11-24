@@ -1,8 +1,8 @@
 {
   "name": "Treino pessoal",
   "short_name": "Treino",
-  "start_url": "/treino-pwa/",
-  "scope": "/treino-pwa/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "theme_color": "#18181b",
   "background_color": "#fafafa",

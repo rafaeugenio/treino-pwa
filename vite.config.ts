@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
 import { VitePWA } from "vite-plugin-pwa";
 export default defineConfig({
-  base: "/treino-pwa/",
+  base: "/",
   resolve: { alias: { "@": fileURLToPath(new URL(".", import.meta.url)) } },
   plugins: [
     react(),

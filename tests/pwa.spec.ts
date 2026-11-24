@@ -49,8 +49,8 @@ test("manifest, metas, layout e persistência", async ({
   expect(manifest).toMatchObject({
     name: "Treino pessoal",
     short_name: "Treino",
-    start_url: "/treino-pwa/",
-    scope: "/treino-pwa/",
+    start_url: "/",
+    scope: "/",
     display: "standalone",
     theme_color: "#18181b",
     background_color: "#fafafa",
@@ -64,7 +64,7 @@ test("manifest, metas, layout e persistência", async ({
   ).toBeTruthy();
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute(
     "href",
-    "/treino-pwa/apple-touch-icon.png",
+    "/apple-touch-icon.png",
   );
   for (const name of [
     "apple-mobile-web-app-capable",
@@ -99,7 +99,7 @@ test("manifest, metas, layout e persistência", async ({
   await page.evaluate(async () => {
     const registration = await navigator.serviceWorker.ready;
     if (!registration.active) throw Error("SW inativo");
-    if (new URL(registration.scope).pathname !== "/treino-pwa/")
+    if (new URL(registration.scope).pathname !== "/")
       throw Error("escopo incorreto");
   });
   await page.reload();
