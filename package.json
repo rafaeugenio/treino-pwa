@@ -7,10 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "vitest run && node --test scripts/publicar-pages.test.mjs",
+    "test": "vitest run",
     "test:pwa": "playwright test",
-    "check": "npm run lint && tsc -b && npm test && npm run build && npm run test:pwa",
-    "publicar:pages": "node scripts/publicar-pages.mjs"
+    "check": "npm run lint && tsc -b && npm test && npm run build && npm run test:pwa"
   },
   "dependencies": {
     "@remixicon/react": "^4.9.0",
