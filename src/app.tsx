@@ -54,7 +54,15 @@ function Registro({ atividades, onSaved }: { atividades: Atividade[]; onSaved: (
         }}
       >
         <Input label="Data" type="date" value={data} onChange={setData} isRequired />
-        <Input label="Atividade" value={nome} onChange={setNome} isRequired maxLength={60} />
+        <Input
+          label="Atividade"
+          value={nome}
+          onChange={setNome}
+          isRequired
+          maxLength={60}
+          validate={(valor) => (valor && !valor.trim() ? "Informe a atividade" : null)}
+          errorMessage="Informe a atividade"
+        />
         <Input
           label="Horas"
           inputMode="decimal"

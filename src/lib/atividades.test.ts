@@ -22,6 +22,10 @@ describe("horas", () => {
   it("recusa vazio, zero, negativo, texto e mais de 24 h", () => {
     for (const texto of ["", "0", "-1", "abc", "1,5,5", "24,5", "1e2"]) expect(parseHoras(texto)).toBeNull();
   });
+  it("recusa horas que arredondam para zero", () => {
+    for (const texto of ["0,001", "0,004", "0.004"]) expect(parseHoras(texto)).toBeNull();
+    expect(parseHoras("0,005")).toBe(0.01);
+  });
   it("formata com vírgula", () => {
     expect(formatHoras(1.5)).toBe("1,5 h");
     expect(formatHoras(2)).toBe("2 h");

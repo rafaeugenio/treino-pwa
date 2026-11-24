@@ -12,12 +12,12 @@ export interface Atividade {
 
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Aceita "1,5", "1.5" e "2"; devolve null fora de (0, 24]. */
+/** Aceita "1,5", "1.5" e "2"; arredonda a centésimos e devolve null fora de (0, 24]. */
 export function parseHoras(texto: string): number | null {
   const limpo = texto.trim().replace(",", ".");
   if (!/^\d+(\.\d+)?$/.test(limpo)) return null;
-  const horas = Number(limpo);
-  return horas > 0 && horas <= 24 ? Math.round(horas * 100) / 100 : null;
+  const horas = Math.round(Number(limpo) * 100) / 100;
+  return horas > 0 && horas <= 24 ? horas : null;
 }
 
 export function formatHoras(horas: number): string {

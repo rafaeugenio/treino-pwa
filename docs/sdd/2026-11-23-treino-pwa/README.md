@@ -166,6 +166,7 @@ Plano de 28 dias e deslize (CA02 e CA03, RAFA-183), dor (CA04), estatísticas re
 - [x] Tela Registro com data, nome, horas e lista do dia.
 - [x] `tests/registro.spec.ts` (CA01): registra Vôlei 1,5 e Flexões no dia 24 e Futebol no dia 23, confere a lista de cada dia, fecha a página e reabre outra no mesmo contexto, e confere de novo; segundo teste confere o dia de hoje como padrão, a recusa de horas inválidas sem gravar e alvos de 44 px.
 - [x] `tests/pwa.spec.ts` (CA07): a prova de persistência e reabertura offline passou a registrar Vôlei 1,5 em 24/11/2026 e a conferir essa atividade após recarregar, offline e depois de 20 s sem páginas.
+- [x] Ajustes da revisão Bari r1 ([review 6049069913](https://github.com/rafaeugenio/treino-pwa/pull/6#pullrequestreview-6049069913)): horas que arredondam para 0 (ex.: `0,001`) passam a ser recusadas por `parseHoras` com `Horas inválidas` no campo; nome só com espaços mostra `Informe a atividade` no campo Atividade. Nos dois casos nada é gravado e o alerta de dispositivo não aparece (testes unitário e Playwright).
 - [ ] Revisão Bari no head exato e merge pelo responsável.
 
 ### Gates

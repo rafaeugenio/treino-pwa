@@ -59,3 +59,22 @@ test("abre no dia de hoje e recusa horas inválidas", async ({ page }) => {
     expect(box.width).toBeGreaterThanOrEqual(44);
   }
 });
+
+// Achados Bari r1 (review 6049069913): erro no campo, nada gravado e sem o alerta de dispositivo.
+for (const caso of [
+  { titulo: "horas que arredondam para zero", nome: "Vôlei", horas: "0,001", campo: "Horas", erro: "Horas inválidas" },
+  { titulo: "nome só com espaços", nome: "   ", horas: "1", campo: "Atividade", erro: "Informe a atividade" },
+]) {
+  test(`recusa ${caso.titulo} com erro no campo ${caso.campo}`, async ({ page }) => {
+    await page.goto("./#registro");
+    await registrar(page, "2026-11-24", caso.nome, caso.horas);
+    const campo = page.getByRole("textbox", { name: caso.campo, exact: true });
+    await expect(campo).toHaveAttribute("aria-invalid", "true");
+    await expect(page.getByText(caso.erro, { exact: true })).toBeVisible();
+    await expect(page.getByTestId("atividades")).toHaveCount(0);
+    await expect(page.getByText("Nenhuma atividade")).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(page.getByText("Não foi possível salvar neste dispositivo.")).toHaveCount(0);
+    expect(await page.evaluate(() => localStorage.getItem("treino-pwa:atividades:v1"))).toBeNull();
+  });
+}
