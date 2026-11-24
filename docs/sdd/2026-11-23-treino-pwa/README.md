@@ -1,4 +1,4 @@
-# Treino PWA: SDD da RAFA-180
+# Treino PWA: SDD da RAFA-180 e RAFA-181
 
 ## Spec
 
@@ -104,3 +104,42 @@ Testes node incluem dist ausente, identidade ausente, hook de commit falho após
 ### Reabertura offline no WebKit
 
 Na rodada F1 a F4 o check falhou uma vez no WebKit ao reabrir offline (`FetchEvent.respondWith: Load failed`). Causa: o contexto efêmero do Playwright WebKit esvazia o Cache Storage do precache quando o origin fica sem páginas por alguns segundos, com o SW ainda ativo; offline, o Workbox não acha index.html e recorre à rede. Uma sonda com 20 s sem páginas falha do mesmo jeito em main 2b1b069 e em 2a234e1, passa no Chromium e passa nos dois motores com perfil persistente. O defeito era do teste, anterior a este PR. Correção: tests/pwa.spec.ts usa launchPersistentContext com o perfil do projeto, confere zero páginas abertas e espera 20 s antes de reabrir offline.
+
+## RAFA-181: casco mobile-first com Board UI
+
+Issue: [RAFA-181](https://linear.app/rafagg/issue/RAFA-181/02-montar-o-casco-mobile-first-com-board-ui). Contrato: [CA08 da RAFA-176](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia), sem reescrita, mais a D3. O Spec da RAFA-181 ainda cita Dialkit; vale o CA08 e a D3, e o Dialkit continua fora.
+
+### Design
+
+- Seis telas na ordem do CA08: Início, Registro, Plano, Dor, Estatísticas e Lembretes (`src/screens.ts`).
+- Navegação por `Tabs`, `TabList`, `Tab` e `TabPanel` do Board UI (react-aria), numa barra inferior fixa só com ícones Remix e nome acessível por `aria-label`. Seis rótulos não cabem em 390 px sem legenda pequena; o título h1 de cada tela nomeia a tela aberta.
+- Cada tela tem só o título h1 e componentes Board UI: StatCards nas telas sem feature (valores zerados reais, sem dado inventado), Input e Button no Registro.
+- A tela aberta fica no hash (`#registro` etc.), então recarregar mantém a tela. Início usa `/` sem hash.
+- Safe areas: `main` usa `env(safe-area-inset-*)` nos quatro lados e reserva a altura da barra; a barra soma `env(safe-area-inset-bottom)` e as laterais.
+- Alvos de toque: abas, botões e campos com no mínimo 44×44 px.
+- A prova local do CA07 (formulário Registro, `data-testid="record"`) foi para a tela Registro. O botão Atualizar fica acima das telas, visível em qualquer uma.
+
+### Peças Board UI
+
+| Peça | Origem |
+| --- | --- |
+| `components/base/tabs/tabs.tsx` e `pill-tab.tsx` | Nova, `npx --yes boardui@0.5.9 add tabs --yes`; o CLI só escreve os dois arquivos e pulou os 5 existentes. `pill-tab.tsx` vem junto no item e não é usado. |
+| StatCards, Button, Input, Chip, Tooltip, direction | Já existentes da RAFA-180, sem regenerar. |
+
+Toolcraft: nenhuma parte nova entrou; a tabela da RAFA-180 acima continua valendo. Dialkit ausente.
+
+### Fora desta entrega
+
+CA01 a CA06 (registro completo, plano de 28 dias com deslize, dor, estatísticas reais e lembrete local) ficam nas RAFA-182 a 186. As telas desta entrega são placeholders.
+
+### Tarefas
+
+- [x] Seis telas navegáveis com Tabs Board UI em 390×844.
+- [x] Prova CA07 movida para a tela Registro, testes ajustados.
+- [x] `tests/casco.spec.ts`: percorre as seis telas nos dois motores conferindo Tabs/TabPanel react-aria, título, peça Board UI visível, nenhum texto de descrição sob o título, toque ≥ 44 px, ausência de rolagem horizontal, conteúdo acima da barra fixa e hash após recarregar; segundo teste confere `env(safe-area-inset-*)` nos quatro lados e a barra fixa.
+- [x] `src/screens.test.ts`: hash para tela e as seis telas na ordem.
+- [ ] Revisão Bari no head exato e merge pelo responsável.
+
+### Gates
+
+`npm run check` com HOME falso (`rafa181-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Resultados e exit codes na seção Verification do PR. Anti-slop: PASSOU, com screenshots das seis telas em WebKit revisados localmente (não versionados). Safe area real com notch e home indicator exige conferência no iPhone; o Playwright não simula inset.
