@@ -9,8 +9,7 @@
     "lint": "oxlint",
     "test": "vitest run",
     "test:pwa": "playwright test",
-    "check": "npm run lint && tsc -b && npm test && npm run build && npm run test:pwa",
-    "publicar:pages": "node scripts/publicar-pages.mjs"
+    "check": "npm run lint && tsc -b && npm test && npm run build && npm run test:pwa"
   },
   "dependencies": {
     "@remixicon/react": "^4.9.0",
@@ -20,7 +19,7 @@
     "tailwind-merge": "^3.7.1"
   },
   "devDependencies": {
-    "@playwright/test": "latest",
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
@@ -30,7 +29,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.2.0",
-    "vite-plugin-pwa": "latest",
-    "vitest": "latest"
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.1.1"
   }
 }

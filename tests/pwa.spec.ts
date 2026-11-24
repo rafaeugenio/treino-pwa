@@ -1,10 +1,42 @@
-import { test, expect } from "@playwright/test";
+import { test as base, expect } from "@playwright/test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
+// Perfil persistente, como o app instalado no iPhone. O contexto efêmero do
+// WebKit esvazia o Cache Storage quando o origin fica sem páginas, e a
+// reabertura offline falharia por limitação do navegador de teste, sem
+// relação com o app.
+const test = base.extend({
+  context: async ({ playwright, browserName }, fornecer, info) => {
+    const { viewport, userAgent, screen, deviceScaleFactor, isMobile, hasTouch } = info.project.use;
+    const profile = mkdtempSync(join(tmpdir(), "treino-pwa-perfil-"));
+    const context = await playwright[browserName].launchPersistentContext(profile, {
+      baseURL: info.project.use.baseURL,
+      viewport,
+      userAgent,
+      screen,
+      deviceScaleFactor,
+      isMobile,
+      hasTouch,
+    });
+    try {
+      await fornecer(context);
+    } finally {
+      await context.close();
+      rmSync(profile, { recursive: true, force: true, maxRetries: 5 });
+    }
+  },
+  page: async ({ context }, fornecer) => {
+    await fornecer(context.pages()[0] ?? (await context.newPage()));
+  },
+});
 test("manifest, metas, layout e persistência", async ({
   page,
   context,
   baseURL,
-
 }) => {
+  test.setTimeout(60_000);
   const foreign: string[] = [];
   context.on("request", (r) => {
     if (new URL(r.url()).origin !== new URL(baseURL!).origin)
@@ -17,8 +49,8 @@ test("manifest, metas, layout e persistência", async ({
   expect(manifest).toMatchObject({
     name: "Treino pessoal",
     short_name: "Treino",
-    start_url: "/treino-pwa/",
-    scope: "/treino-pwa/",
+    start_url: "/",
+    scope: "/",
     display: "standalone",
     theme_color: "#18181b",
     background_color: "#fafafa",
@@ -32,7 +64,7 @@ test("manifest, metas, layout e persistência", async ({
   ).toBeTruthy();
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute(
     "href",
-    "/treino-pwa/apple-touch-icon.png",
+    "/apple-touch-icon.png",
   );
   for (const name of [
     "apple-mobile-web-app-capable",
@@ -67,7 +99,7 @@ test("manifest, metas, layout e persistência", async ({
   await page.evaluate(async () => {
     const registration = await navigator.serviceWorker.ready;
     if (!registration.active) throw Error("SW inativo");
-    if (new URL(registration.scope).pathname !== "/treino-pwa/")
+    if (new URL(registration.scope).pathname !== "/")
       throw Error("escopo incorreto");
   });
   await page.reload();
@@ -78,6 +110,9 @@ test("manifest, metas, layout e persistência", async ({
   await page.reload();
   await expect(page.getByTestId("record")).toHaveText("Flexões: 12");
   await page.close();
+  expect(context.pages()).toHaveLength(0);
+  // Sem nenhuma página por 20 s: tempo suficiente para o navegador encerrar o SW.
+  await new Promise((resolve) => setTimeout(resolve, 20_000));
   const reopened = await context.newPage();
   await reopened.goto(baseURL!);
   await expect(reopened.getByTestId("record")).toHaveText("Flexões: 12");
