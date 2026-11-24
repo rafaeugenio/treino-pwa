@@ -9,8 +9,29 @@ import { DirectionProvider } from "@/components/foundations/direction/direction"
 import { load, save } from "./lib/storage";
 import "@/styles/globals.css";
 import "./app.css";
+// O iOS deixa o app instalado suspenso por horas; ao voltar ao primeiro plano
+// o navegador não busca o SW novo sozinho. Checa no retorno, no máximo a cada
+// 60 s e só online. A primeira volta depois de abrir sempre checa.
+const SW_CHECK_INTERVAL_MS = 60_000;
+let watchedRegistration: ServiceWorkerRegistration | undefined;
+function checkSwOnVisible(registration: ServiceWorkerRegistration) {
+  if (watchedRegistration === registration) return;
+  watchedRegistration = registration;
+  let lastCheck = -Infinity;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible" || !navigator.onLine) return;
+    const now = Date.now();
+    if (now - lastCheck < SW_CHECK_INTERVAL_MS) return;
+    lastCheck = now;
+    registration.update().catch(() => undefined);
+  });
+}
 function App() {
-  const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW();
+  const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW({
+    onRegisteredSW: (_url, registration) => {
+      if (registration) checkSwOnVisible(registration);
+    },
+  });
   const [record, setRecord] = useState(() => {
     try {
       return load(localStorage);
