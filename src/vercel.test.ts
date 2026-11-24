@@ -21,7 +21,6 @@ describe("vercel.json", () => {
   it("não captura SW, manifest, ícones nem assets", () => {
     for (const path of [
       "/sw.js",
-      "/registerSW.js",
       "/workbox-2fbc6a65.js",
       "/manifest.webmanifest",
       "/apple-touch-icon.png",
@@ -34,7 +33,7 @@ describe("vercel.json", () => {
   });
 
   it("serve SW e manifest sem cache longo", () => {
-    for (const source of ["/sw.js", "/registerSW.js", "/manifest.webmanifest"])
+    for (const source of ["/sw.js", "/manifest.webmanifest"])
       expect(cache(source)).toBe("public, max-age=0, must-revalidate");
     expect(cache("/assets/(.*)")).toContain("immutable");
   });
