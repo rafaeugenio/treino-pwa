@@ -4,7 +4,7 @@
 
 Fonte: snapshot RAFA-176 de 23/11/2026 19:10, fornecido pelo Mochi.
 [RAFA-176](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia) e [RAFA-180](https://linear.app/rafagg/issue/RAFA-180/01-criar-repo-github-pages-e-pwa-offline).
-Requisitos originais copiados abaixo; D3 substitui a stack do requisito 7.
+Requisitos originais copiados abaixo; D3 substitui a stack do requisito 7. Decisão do Rafael em 23/11/2026 21:32, registrada pelo Mochi na RAFA-176: o destino do requisito 8 passou do GitHub Pages para a Vercel, conta pessoal RafaGG, em projeto novo só deste app, servido na raiz /.
 **Requisitos e escopo**
 
  1. Registrar atividades diárias: dia, o que praticou e quantas horas.
@@ -21,7 +21,7 @@ Requisitos originais copiados abaixo; D3 substitui a stack do requisito 7.
 
 ## Fora de escopo
 
-Sem backend, sem sincronização na nuvem e sem publicação na Vercel (Vercel exige OK à parte e não entra neste trabalho). Sem dados sensíveis no repositório.
+Sem backend e sem sincronização na nuvem. Criar o projeto na Vercel, conectar o repo e fazer deploy ficam fora deste PR: o Mochi faz isso depois do merge. Sem dados sensíveis no repositório.
 
 Complemento do Mane · Spec:
 
@@ -44,9 +44,9 @@ Base mobile de 390×844, tipografia de sistema, tokens neutros Board UI, safe ar
 - [x] Board UI gerado por CLI pinado; avaliação Toolcraft.
 - [x] Manifest, ícones próprios, SW e armazenamento local.
 - [x] Testes unitários e PWA em dois motores.
-- [x] Script de publicação preparado, sem execução.
+- [x] vercel.json com fallback SPA e cache do SW, sem deploy.
 - [ ] Revisão Bari no head exato e merge pelo responsável.
-- [ ] Publicação posterior ao merge.
+- [ ] Deploy na Vercel pelo Mochi depois do merge.
 
 ## Implementação
 
@@ -54,7 +54,7 @@ Configuração adaptada da referência somente leitura: plugin React, alias @/, 
 
 localStorage contém somente o último registro demonstrativo na chave versionada treino-pwa:registro:v1. Falhas de gravação geram erro visível. Nenhuma API de dados ou host externo. Esta prova não implementa o registro completo de atividades da RAFA-181.
 
-vite-plugin-pwa/Workbox generateSW gera precache do shell versionado com base /treino-pwa/. O SW fica em espera nas atualizações, sem skipWaiting automático ou recarga durante edição. O botão Board UI Atualizar (mínimo 44 px) aparece quando há uma versão em espera e aplica a atualização ao toque; caches antigos são limpos na ativação. Isso evita misturar assets durante uma sessão. Manifest estático e ícones próprios incluem apple-touch 180, 192, 512 e maskable 512.
+vite-plugin-pwa/Workbox generateSW gera precache do shell versionado com base /. O SW fica em espera nas atualizações, sem skipWaiting automático ou recarga durante edição. O botão Board UI Atualizar (mínimo 44 px) aparece quando há uma versão em espera e aplica a atualização ao toque; caches antigos são limpos na ativação. Isso evita misturar assets durante uma sessão. Manifest estático e ícones próprios incluem apple-touch 180, 192, 512 e maskable 512.
 
 ### Toolcraft
 
@@ -73,11 +73,13 @@ Starter gerado em diretório temporário com --no-skills. O npm interno falhou c
 
 Dialkit ausente. D3 autoriza essa seleção sem forçar Toolcraft. O registro dos motivos fica neste SDD e no card RAFA-180, onde foi registrado pelo Mochi.
 
-### Publicação do Pages, somente após merge
+### Publicação na Vercel, somente após merge
 
-Somente após o APROVADO do Bari neste PR e merge: executar `npm run publicar:pages` com HOME falso e o mesmo node/npm do processo. Após `git fetch origin`, o script exige branch main, checkout limpo e SHAs main = origin/main. Valida previamente a identidade efetiva (`git var GIT_AUTHOR_IDENT` e `GIT_COMMITTER_IDENT`); com HOME falso, configure sua identidade git local antes, sem depender do HOME habitual. Executa `npm run check`, aborta se falhar e reconfere o checkout limpo antes do build; compila com base /treino-pwa/, publica dist e .nojekyll por push normal. Rejeições abortam. Em finally limpa somente o conteúdo da worktree exclusiva que criou, restaura um commit conhecido no índice/disco e desanexa a branch antes de remover a worktree sem --force. Só apaga a ref publicacao-pages-* se existir (branch órfã ainda sem commit não tem ref). Cada etapa de limpeza é independente; falhas informam o caminho sem mascarar o erro original. Testes exercitam apenas origins bare locais em rafa180-pub-sandbox; nenhuma publicação real foi executada.
+O GitHub Pages saiu do plano. O script publicar-pages.mjs, seus testes e o npm script publicar:pages foram removidos porque só publicavam na branch gh-pages, que não será usada; a Vercel faz o build a partir do repo conectado. O app passou da base /treino-pwa/ para a raiz /, em vite.config.ts, no manifest (start_url e scope), nos ícones, no Playwright e nos testes.
 
-Depois configurar no GitHub: Settings → Pages → Deploy from a branch → gh-pages → / (root). URL planejada: https://rafaeugenio.github.io/treino-pwa/. Nenhuma publicação ou configuração realizada neste PR. Actions sem cota; nenhum workflow criado.
+vercel.json mínimo: um rewrite manda para /index.html só caminhos sem extensão e fora de /assets/, então sw.js, registerSW.js, workbox-*.js, manifest.webmanifest, ícones e assets são servidos como arquivos. sw.js, registerSW.js e manifest.webmanifest vão com `Cache-Control: public, max-age=0, must-revalidate`, para o navegador sempre buscar o SW novo e o aviso Atualizar aparecer; /assets/, com nomes versionados, vai com cache imutável de um ano. src/vercel.test.ts confere essas regras no Vitest.
+
+Plano após o APROVADO do Bari no head exato e merge, executado pelo Mochi: criar projeto novo na conta pessoal RafaGG, conectar este repo, framework Vite detectado (build `npm run build`, saída dist), deploy de produção a partir de main. Depois, conferir no iPhone a instalação pelo Safari e a abertura offline. Nenhum projeto, conexão ou deploy foi feito neste PR.
 
 ## Gates
 
@@ -89,7 +91,7 @@ CAs são referenciados pelo contrato original, sem reescrita: [CA01, CA02, CA03,
 
 ## Resultado
 
-Repo: https://github.com/rafaeugenio/treino-pwa. Pages: URL planejada acima, ainda não publicada. Check e PR: resultados finais no relatório do autor e na seção Verification do PR. Instalação Safari: Compartilhar → Adicionar à Tela de Início; abrir uma vez conectado antes de usar offline. Apagar os dados do site remove o registro local.
+Repo: https://github.com/rafaeugenio/treino-pwa. Vercel: projeto ainda não criado; a URL sai do primeiro deploy. Check e PR: resultados finais no relatório do autor e na seção Verification do PR. Instalação Safari: Compartilhar → Adicionar à Tela de Início; abrir uma vez conectado antes de usar offline. Apagar os dados do site remove o registro local.
 
 ### Rastreabilidade Board UI
 
@@ -97,7 +99,7 @@ Componentes existentes gerados com boardui@0.5.9. Esta entrega reutiliza Button 
 
 ### Correções da revisão de publicação (F1 a F4)
 
-Testes node incluem dist ausente, identidade ausente, hook de commit falho após cópia e check que suja checkout. Cada fixture criada é removida no fim. O sandbox padrão usa tmpdir(); nesta máquina, execute com $env:RAFA_PAGES_TEST_SANDBOX='C:\dev\Geral\tmp-harness\rafa180-pub-sandbox' antes do wrapper HOME falso. O teste SW gera o segundo build com configuração temporária e transformIndexHtml, sem reescrever index.html versionado, e remove seus builds temporários ao final.
+Testes node incluem dist ausente, identidade ausente, hook de commit falho após cópia e check que suja checkout. Cada fixture criada era removida no fim. Script e testes saíram depois, com a troca para a Vercel (ver Publicação). O teste SW gera o segundo build com configuração temporária e transformIndexHtml, sem reescrever index.html versionado, e remove seus builds temporários ao final.
 
 ### Reabertura offline no WebKit
 
