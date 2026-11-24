@@ -11,6 +11,7 @@ test("atualização por toque aplica o segundo build", async ({ page }) => {
   const temp = mkdtempSync(join(tmpdir(), "treino-sw-update-"));
   let server: ReturnType<typeof createServer> | undefined;
   let failed = false;
+  let cleanupError: unknown;
   try {
     const first = join(temp, "first");
     const second = join(temp, "second");
@@ -50,12 +51,11 @@ export default { ...config, plugins: [...config.plugins, { name: "test-update-ti
     failed = true;
     throw error;
   } finally {
-    let cleanupError: unknown;
     try {
       if (server?.listening) await new Promise<void>((resolve, reject) => server!.close((error) => error ? reject(error) : resolve()));
     } catch (error) { cleanupError = error; }
     try { rmSync(temp, { recursive: true, force: true, maxRetries: 3 }); }
     catch (error) { cleanupError ??= error; }
-    if (!failed && cleanupError) throw cleanupError;
   }
+  if (!failed && cleanupError) throw cleanupError;
 });
