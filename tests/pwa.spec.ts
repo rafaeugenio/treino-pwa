@@ -80,6 +80,7 @@ test("manifest, metas, layout e persistência", async ({
     "content",
     /viewport-fit=cover/,
   );
+  await page.getByRole("tab", { name: "Registro" }).click();
   await page.getByRole("textbox", { name: "Registro" }).fill("Flexões: 12");
   await page.getByRole("button", { name: "Salvar treino" }).click();
   await expect(page.getByTestId("record")).toHaveText("Flexões: 12");
@@ -115,6 +116,7 @@ test("manifest, metas, layout e persistência", async ({
   await new Promise((resolve) => setTimeout(resolve, 20_000));
   const reopened = await context.newPage();
   await reopened.goto(baseURL!);
+  await reopened.getByRole("tab", { name: "Registro" }).click();
   await expect(reopened.getByTestId("record")).toHaveText("Flexões: 12");
   expect(foreign).toEqual([]);
 });
