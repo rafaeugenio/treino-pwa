@@ -54,7 +54,7 @@ Configuração adaptada da referência somente leitura: plugin React, alias @/, 
 
 localStorage contém somente o último registro demonstrativo na chave versionada treino-pwa:registro:v1. Falhas de gravação geram erro visível. Nenhuma API de dados ou host externo. Esta prova não implementa o registro completo de atividades da RAFA-181.
 
-vite-plugin-pwa/Workbox generateSW gera precache do shell versionado com base /. O SW fica em espera nas atualizações, sem skipWaiting automático ou recarga durante edição. O botão Board UI Atualizar (mínimo 44 px) aparece quando há uma versão em espera e aplica a atualização ao toque; caches antigos são limpos na ativação. Isso evita misturar assets durante uma sessão. Manifest estático e ícones próprios incluem apple-touch 180, 192, 512 e maskable 512.
+vite-plugin-pwa/Workbox generateSW gera precache do shell versionado com base /. O SW fica em espera nas atualizações, sem skipWaiting automático ou recarga durante edição. O botão Board UI Atualizar (mínimo 44 px) aparece quando há uma versão em espera e aplica a atualização ao toque; caches antigos são limpos na ativação. Isso evita misturar assets durante uma sessão. Ao voltar ao primeiro plano (visibilitychange visível), o useRegisterSW do casco em src/app.tsx guarda a registration e um useEffect com cleanup chama registration.update(), no máximo a cada 60 s (performance.now()) e só online, para o Atualizar aparecer sem reabrir o app. Página oculta ou offline não busca o SW nem gasta o intervalo (RAFA-225; testes em tests/update-visibility.spec.ts). Manifest estático e ícones próprios incluem apple-touch 180, 192, 512 e maskable 512.
 
 ### Toolcraft
 
@@ -117,7 +117,7 @@ Issue: [RAFA-181](https://linear.app/rafagg/issue/RAFA-181/02-montar-o-casco-mob
 - A tela aberta fica no hash (`#registro` etc.), então recarregar mantém a tela. Início usa `/` sem hash.
 - Safe areas: `main` usa `env(safe-area-inset-*)` nos quatro lados e reserva a altura da barra; a barra soma `env(safe-area-inset-bottom)` e as laterais.
 - Alvos de toque: abas, botões e campos com no mínimo 44×44 px.
-- A prova local do CA07 (formulário Registro, `data-testid="record"`) foi para a tela Registro. O botão Atualizar fica acima das telas, visível em qualquer uma.
+- A prova local do CA07 (formulário Registro, `data-testid="record"`) foi para a tela Registro. O botão Atualizar fica acima das telas, visível em qualquer uma. Com o casco, `src/main.tsx` só monta o app e o `useRegisterSW` (Atualizar e checagem do SW ao voltar ao primeiro plano da RAFA-225) vive em `src/app.tsx`.
 
 ### Peças Board UI
 

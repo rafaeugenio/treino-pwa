@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import {
   RiAlarmLine,
@@ -26,6 +26,26 @@ const ICONS: Record<ScreenId, RemixiconComponentType> = {
   estatisticas: RiBarChart2Line,
   lembretes: RiAlarmLine,
 };
+
+// O iOS deixa o app instalado suspenso por horas; ao voltar ao primeiro plano
+// o navegador não busca o SW novo sozinho. Checa no retorno, no máximo a cada
+// 60 s e só online. A primeira volta depois de abrir sempre checa.
+const SW_CHECK_INTERVAL_MS = 60_000;
+function useSwCheckOnVisible(registration: ServiceWorkerRegistration | undefined) {
+  const lastCheck = useRef(-Infinity);
+  useEffect(() => {
+    if (!registration) return;
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible" || !navigator.onLine) return;
+      const now = performance.now();
+      if (now - lastCheck.current < SW_CHECK_INTERVAL_MS) return;
+      lastCheck.current = now;
+      registration.update().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [registration]);
+}
 
 // Prova local do CA07 (RAFA-180). O registro completo é da RAFA-182.
 function Registro({ record, onSaved }: { record: string; onSaved: (value: string) => void }) {
@@ -67,10 +87,16 @@ function Registro({ record, onSaved }: { record: string; onSaved: (value: string
 }
 
 export function App() {
+  const [swRegistration, setSwRegistration] = useState<ServiceWorkerRegistration>();
   const {
     needRefresh: [needRefresh],
     updateServiceWorker,
-  } = useRegisterSW();
+  } = useRegisterSW({
+    onRegisteredSW: (_url, registration) => {
+      if (registration) setSwRegistration(registration);
+    },
+  });
+  useSwCheckOnVisible(swRegistration);
   const [screen, setScreen] = useState<ScreenId>(() => screenFromHash(location.hash));
   const [record, setRecord] = useState(() => {
     try {
