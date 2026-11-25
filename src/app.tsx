@@ -84,37 +84,61 @@ function lerSalvo(): Salvo {
 
 // CA03-B3: plano salvo que não pode ser lido. Pede confirmação, guarda o
 // conteúdo inválido em backup e começa um plano novo hoje.
+// Bari r1: o segundo gesto de um toque duplo, dblclick ou Enter repetido não
+// pode cair no Confirmar. No estado de confirmação o lugar do Recomeçar fica
+// com o título, o foco vai para o Cancelar e o Confirmar fica por último.
 function RecomecarPlano({ onRecomecado }: { onRecomecado: (plano: Plano) => void }) {
   const [confirmando, setConfirmando] = useState(false);
   const [error, setError] = useState("");
+  const recomecarRef = useRef<HTMLButtonElement>(null);
+  const cancelarRef = useRef<HTMLButtonElement>(null);
+  const voltarFoco = useRef(false);
+  useEffect(() => {
+    if (confirmando) cancelarRef.current?.focus();
+    else if (voltarFoco.current) {
+      voltarFoco.current = false;
+      recomecarRef.current?.focus();
+    }
+  }, [confirmando]);
   return (
     <>
-      <div className={CARD}>
-        {confirmando ? (
-          <>
-            <Button
-              className="min-h-11"
-              onClick={() => {
-                try {
-                  onRecomecado(planoLocal.recomecar(localStorage, hoje()));
-                  setError("");
-                } catch {
-                  setError(ERRO_DISPOSITIVO);
-                }
-              }}
-            >
-              Confirmar
-            </Button>
-            <Button className="min-h-11" variant="secondary" onClick={() => setConfirmando(false)}>
-              Cancelar
-            </Button>
-          </>
-        ) : (
-          <Button className="min-h-11" onClick={() => setConfirmando(true)}>
+      {confirmando ? (
+        <section className={CARD} aria-labelledby="recomecar-titulo">
+          <h2 id="recomecar-titulo" className="text-title-3-semibold">
+            Recomeçar plano?
+          </h2>
+          <Button
+            ref={cancelarRef}
+            className="min-h-11"
+            variant="secondary"
+            onClick={() => {
+              voltarFoco.current = true;
+              setConfirmando(false);
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            className="min-h-11"
+            onClick={() => {
+              try {
+                onRecomecado(planoLocal.recomecar(localStorage, hoje()));
+                setError("");
+              } catch {
+                setError(ERRO_DISPOSITIVO);
+              }
+            }}
+          >
+            Confirmar
+          </Button>
+        </section>
+      ) : (
+        <div className={CARD}>
+          <Button ref={recomecarRef} className="min-h-11" onClick={() => setConfirmando(true)}>
             Recomeçar plano
           </Button>
-        )}
-      </div>
+        </div>
+      )}
       {error && <p role="alert">{error}</p>}
     </>
   );

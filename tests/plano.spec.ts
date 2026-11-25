@@ -329,3 +329,63 @@ test("CA03-B3: confirmar guarda o conteúdo inválido em backup e o plano novo c
   await expect(hojeCard(page)).toContainText(/Treino 1\s*de 28/);
   await expect(recomecar(page)).toHaveCount(0);
 });
+
+// Ajustes Bari r1 (review 6050114781): o segundo gesto nunca confirma e o foco volta ao Recomeçar.
+async function nadaGravado(page: Page) {
+  await expect(page.getByTestId("plano")).toHaveCount(0);
+  expect(await lerChave(page, KEY_PLANO)).toBe("{");
+  expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.includes(":backup:")))).toEqual([]);
+  await expect(
+    page.getByRole("button", { name: /^(Recomeçar plano|Cancelar)$/ }).first(),
+  ).toBeVisible();
+  await semAlerta(page);
+}
+async function abrirCorrompidoNoPlano(page: Page) {
+  await abrirCorrompido(page);
+  await tab(page, "Plano");
+  await expect(recomecar(page)).toBeVisible();
+}
+
+test("CA03-B3: dblclick no Recomeçar plano não confirma", async ({ page }) => {
+  await abrirCorrompidoNoPlano(page);
+  await recomecar(page).dblclick();
+  await expect(page.getByRole("heading", { name: "Recomeçar plano?" })).toBeVisible();
+  await nadaGravado(page);
+});
+
+test("CA03-B3: dois toques rápidos no Recomeçar plano não confirmam", async ({ page }) => {
+  await abrirCorrompidoNoPlano(page);
+  const box = (await recomecar(page).boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.touchscreen.tap(x, y);
+  await page.waitForTimeout(150);
+  await page.touchscreen.tap(x, y);
+  await expect(page.getByRole("heading", { name: "Recomeçar plano?" })).toBeVisible();
+  await nadaGravado(page);
+});
+
+test("CA03-B3: Enter duas vezes no Recomeçar plano não confirma", async ({ page }) => {
+  await abrirCorrompidoNoPlano(page);
+  await recomecar(page).focus();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await nadaGravado(page);
+});
+
+test("CA03-B3: Cancelar devolve o foco ao Recomeçar plano", async ({ page }) => {
+  await abrirCorrompidoNoPlano(page);
+  await recomecar(page).click();
+  const cancelar = page.getByRole("button", { name: "Cancelar", exact: true });
+  await expect(cancelar).toBeFocused();
+  await cancelar.click();
+  await expect(recomecar(page)).toBeFocused();
+});
+
+test("CA03-B3: a confirmação tem o título Recomeçar plano? para o leitor de tela", async ({ page }) => {
+  await abrirCorrompidoNoPlano(page);
+  await recomecar(page).click();
+  await expect(page.getByRole("heading", { level: 2, name: "Recomeçar plano?" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Recomeçar plano?" })).toBeVisible();
+  await expect(page.getByRole("tabpanel").locator("p")).toHaveCount(0);
+});

@@ -95,7 +95,11 @@ export function recomecar(
   const bruto = storage.getItem(KEY);
   if (bruto === null) throw new Error("sem plano salvo");
   if (carregar(storage) !== null) throw new Error("plano válido");
-  storage.setItem(`${BACKUP}${agora.toISOString()}`, bruto);
+  // Nunca sobrescreve um backup anterior com o mesmo instante.
+  const base = `${BACKUP}${agora.toISOString()}`;
+  let chave = base;
+  for (let n = 2; storage.getItem(chave) !== null; n++) chave = `${base}-${n}`;
+  storage.setItem(chave, bruto);
   const plano: Plano = { inicio: hoje, feitos: [] };
   storage.setItem(KEY, JSON.stringify(plano));
   return plano;
@@ -153,7 +157,11 @@ export function marcarFeito(
     const atividades = adicionar(storage, { data: hoje, nome: treino.nome, horas }, id);
     return { plano: novo, atividades };
   } catch (erro) {
-    storage.setItem(KEY, anterior);
+    try {
+      storage.setItem(KEY, anterior);
+    } catch {
+      // O erro que importa é o da gravação da atividade.
+    }
     throw erro;
   }
 }

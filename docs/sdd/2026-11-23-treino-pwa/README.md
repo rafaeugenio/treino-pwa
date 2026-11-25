@@ -175,7 +175,7 @@ Plano de 28 dias e deslize (CA02 e CA03, RAFA-183), dor (CA04), estatísticas re
 
 ## RAFA-183: plano de 28 dias e deslize
 
-Issue: [RAFA-183](https://linear.app/rafagg/issue/RAFA-183/04-implementar-o-plano-de-28-dias-e-o-deslize). Contrato: [CA02 e CA03 da RAFA-176](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia), sem reescrita, com a D1 confirmada pelo Rafael em 23/11/2026 18:31 (dia previsto sem nenhum registro também desliza). O card da RAFA-183 ainda chama a D1 de provisória; vale a D1 confirmada no card mãe.
+Issue: [RAFA-183](https://linear.app/rafagg/issue/RAFA-183/04-implementar-o-plano-de-28-dias-e-o-deslize). Contrato: [CA02 e CA03 da RAFA-176](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia), sem reescrita, com a D1 confirmada pelo Rafael em 23/11/2026 18:31 (dia previsto sem nenhum registro também desliza).
 
 ### Design
 
@@ -195,7 +195,7 @@ Contrato: [seção "Casos de borda" do card da RAFA-183](https://linear.app/rafa
 
 - CA03-B1: com plano válido, a tela Plano mostra só o progresso e a lista; não há campo de data nem botão de reiniciar. Comportamento já existente, agora coberto por teste.
 - CA03-B2: no toque em Feito, `src/app.tsx` lê o dia do aparelho naquele instante e relê o plano salvo, atualiza a tela (`flushSync`) com o treino previsto para esse dia, já deslizado, e só então grava o treino desse dia na data nova. Sem treino pendente no dia (plano encerrado, ou treino já marcado em outra aba), o Feito some e nada é gravado, sem alerta.
-- CA03-B3: `ler()` distingue plano ausente, válido e inválido. Com conteúdo inválido, Início e Plano mostram o Button `Recomeçar plano` (no Plano, no lugar de `Iniciar`), que abre `Confirmar` e `Cancelar`. Confirmar chama `recomecar()`: guarda o conteúdo inválido em `treino-pwa:plano:v1:backup:<instante ISO>` (uma chave por recomeço, nenhuma sobrescrita) e só depois grava o plano novo começando hoje. Se o backup falhar, nada muda e aparece o alerta de dispositivo, que fica só para falha real de gravação. `iniciar()` continua recusando qualquer chave existente.
+- CA03-B3: `ler()` distingue plano ausente, válido e inválido. Com conteúdo inválido, Início e Plano mostram o Button `Recomeçar plano` (no Plano, no lugar de `Iniciar`), que abre `Confirmar` e `Cancelar`. No estado de confirmação, o título `Recomeçar plano?` (h2) ocupa o lugar do botão, o foco vai para `Cancelar` e `Confirmar` fica por último; assim o segundo gesto de um toque duplo, dblclick ou Enter repetido nunca cai no `Confirmar` (ajuste da [review Bari 6050114781](https://github.com/rafaeugenio/treino-pwa/pull/7#pullrequestreview-6050114781)). Cancelar devolve o foco ao `Recomeçar plano`. Confirmar chama `recomecar()`: guarda o conteúdo inválido em `treino-pwa:plano:v1:backup:<instante ISO>` (uma chave por recomeço; se a chave já existir, usa o sufixo `-2`, `-3` e assim por diante, sem sobrescrever) e só depois grava o plano novo começando hoje. Se o backup falhar, nada muda e aparece o alerta de dispositivo, que fica só para falha real de gravação. `iniciar()` continua recusando qualquer chave existente.
 
 ### Fora desta entrega
 
@@ -207,6 +207,7 @@ Editor do plano pela UI, validação clínica, reiniciar ou trocar a data D de u
 - [x] Telas Início e Plano em `src/app.tsx`.
 - [x] `tests/plano.spec.ts` (WebKit iPhone 15 e Chromium, 390×844, relógio do Playwright): CA02 completo, CA03 com Futebol 2 h no dia previsto, CA03 com dois dias sem registro, troca de dia ao voltar ao primeiro plano, início futuro e erros no campo (`0,001` e data vazia).
 - [x] CA03-B1, B2 e B3: `ler` e `recomecar` com testes unitários; testes Playwright do plano iniciado sem opções de reinício, do Feito cruzando a meia-noite com relógio falso, do plano encerrado antes do toque, da releitura do plano marcado em outra aba e do Recomeçar plano (abertura, confirmação e backup).
+- [x] Ajustes da [review Bari 6050114781](https://github.com/rafaeugenio/treino-pwa/pull/7#pullrequestreview-6050114781): dblclick, dois toques rápidos e Enter duplo no `Recomeçar plano` não confirmam nem gravam; Cancelar devolve o foco ao `Recomeçar plano`; título `Recomeçar plano?` na confirmação; backup com sufixo quando a chave já existe; `marcarFeito` propaga o erro original se desfazer o plano também falhar. Cada item com teste próprio (Playwright nos dois motores ou Vitest).
 - [x] Seção RAFA-181 corrigida: a menção a `data-testid="record"` passou a `data-testid="atividades"`.
 - [ ] Revisão Bari no head exato e merge pelo responsável.
 

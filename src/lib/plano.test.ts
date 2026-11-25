@@ -140,6 +140,17 @@ describe("guardas", () => {
     expect(() => marcarFeito(storage, D, 1)).toThrow("quota");
     expect(carregar(storage)).toEqual({ inicio: D, feitos: [] });
   });
+  it("se desfazer o plano também falhar, propaga o erro original", () => {
+    const storage = salvo({ inicio: D, feitos: [] });
+    const original = storage.setItem;
+    let gravacoesDoPlano = 0;
+    storage.setItem = (key, value) => {
+      if (key === KEY_ATIVIDADES) throw new Error("quota");
+      if (key === KEY && ++gravacoesDoPlano > 1) throw new Error("falha ao desfazer");
+      original(key, value);
+    };
+    expect(() => marcarFeito(storage, D, 1)).toThrow("quota");
+  });
   it("horas inválidas não avançam o plano", () => {
     const storage = salvo({ inicio: D, feitos: [] });
     expect(() => marcarFeito(storage, D, 0)).toThrow("atividade inválida");
@@ -190,6 +201,14 @@ describe("plano salvo que não pode ser lido (CA03-B3)", () => {
     const storage = memoria();
     expect(() => recomecar(storage, D, AGORA)).toThrow("sem plano salvo");
     expect(storage.data.size).toBe(0);
+  });
+  it("backup nunca sobrescreve outro com o mesmo instante", () => {
+    const chave = `${BACKUP}2026-11-24T13:00:00.000Z`;
+    const storage = memoria({ [KEY]: "{", [chave]: "antigo", [`${chave}-2`]: "antigo 2" });
+    recomecar(storage, D, AGORA);
+    expect(storage.data.get(chave)).toBe("antigo");
+    expect(storage.data.get(`${chave}-2`)).toBe("antigo 2");
+    expect(storage.data.get(`${chave}-3`)).toBe("{");
   });
   it("falha no backup não toca no conteúdo inválido", () => {
     const storage = memoria({ [KEY]: "{" });
