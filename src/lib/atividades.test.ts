@@ -1,12 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { KEY, adicionar, carregar, doDia, formatHoras, hoje, parseHoras } from "./atividades";
+import { BACKUP, KEY, adicionar, carregar, doDia, formatHoras, hoje, parseHoras } from "./atividades";
 
 function memoria(inicial?: Record<string, string>) {
   const data = new Map(Object.entries(inicial ?? {}));
+  const gravadas: string[] = [];
   return {
     data,
+    gravadas,
     getItem: (key: string) => data.get(key) ?? null,
     setItem: (key: string, value: string) => {
+      gravadas.push(key);
       data.set(key, value);
     },
   };
@@ -74,5 +77,60 @@ describe("atividades locais", () => {
         { data: "2026-11-24", nome: "Vôlei", horas: 1 },
       ),
     ).toThrow("quota");
+  });
+});
+
+// CA02 da RAFA-228: entradas salvas inválidas vão para backup antes da regravação.
+describe("entradas inválidas preservadas", () => {
+  const AGORA = new Date("2026-11-25T03:00:30.000Z");
+  const CHAVE = `${BACKUP}2026-11-25T03:00:30.000Z`;
+  const valida = { id: "v", data: "2026-11-24", nome: "Vôlei", horas: 1.5 };
+  const nova = { data: "2026-11-25", nome: "Futebol", horas: 2 };
+  const backups = (storage: ReturnType<typeof memoria>) =>
+    [...storage.data.keys()].filter((k) => k.startsWith(BACKUP));
+
+  for (const caso of [
+    { titulo: "item inválido", invalida: { id: "x", data: "ontem", nome: "Corrida", horas: 1 } },
+    { titulo: "campo ausente", invalida: { id: "y", data: "2026-11-24", nome: "Corrida" } },
+    { titulo: "tipo errado", invalida: { id: "z", data: "2026-11-24", nome: "Corrida", horas: "1" } },
+    { titulo: "item que não é objeto", invalida: "Flexões: 12" },
+  ]) {
+    it(`${caso.titulo}: copia para o backup antes de regravar e mantém válidas e a nova`, () => {
+      const storage = memoria({ [KEY]: JSON.stringify([valida, caso.invalida]) });
+      const lista = adicionar(storage, nova, "n", AGORA);
+      expect(storage.gravadas).toEqual([CHAVE, KEY]);
+      expect(JSON.parse(storage.data.get(CHAVE)!)).toEqual([caso.invalida]);
+      expect(lista).toEqual([valida, { ...nova, id: "n" }]);
+      expect(carregar(storage)).toEqual(lista);
+    });
+  }
+
+  it("sem entradas inválidas não cria backup", () => {
+    const storage = memoria({ [KEY]: JSON.stringify([valida]) });
+    adicionar(storage, nova, "n", AGORA);
+    expect(backups(storage)).toEqual([]);
+    expect(storage.gravadas).toEqual([KEY]);
+  });
+
+  it("não sobrescreve um backup anterior com o mesmo instante", () => {
+    const invalida = { id: "x", data: "ontem", nome: "Corrida", horas: 1 };
+    const storage = memoria({ [KEY]: JSON.stringify([valida, invalida]), [CHAVE]: "anterior" });
+    adicionar(storage, nova, "n", AGORA);
+    expect(storage.data.get(CHAVE)).toBe("anterior");
+    expect(JSON.parse(storage.data.get(`${CHAVE}-2`)!)).toEqual([invalida]);
+  });
+
+  it("se o backup falhar, a chave fica como estava e o erro propaga", () => {
+    const bruto = JSON.stringify([valida, { id: "x", data: "ontem", nome: "Corrida", horas: 1 }]);
+    const data = new Map([[KEY, bruto]]);
+    const storage = {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        if (key.startsWith(BACKUP)) throw new Error("quota");
+        data.set(key, value);
+      },
+    };
+    expect(() => adicionar(storage, nova, "n", AGORA)).toThrow("quota");
+    expect(data.get(KEY)).toBe(bruto);
   });
 });

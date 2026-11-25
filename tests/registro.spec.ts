@@ -78,3 +78,64 @@ for (const caso of [
     expect(await page.evaluate(() => localStorage.getItem("treino-pwa:atividades:v1"))).toBeNull();
   });
 }
+
+// CA01 (RAFA-228): a data padrão acompanha a virada do dia do aparelho e a
+// data escolhida à mão é mantida.
+const KEY_ATIVIDADES = "treino-pwa:atividades:v1";
+const salvas = (page: Page) =>
+  page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? "[]") as { data: string; nome: string }[], KEY_ATIVIDADES);
+const campoData = (page: Page) => page.getByRole("textbox", { name: "Data", exact: true });
+async function salvarSemData(page: Page, nome: string, horas: string) {
+  await page.getByRole("textbox", { name: "Atividade", exact: true }).fill(nome);
+  await page.getByRole("textbox", { name: "Horas", exact: true }).fill(horas);
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+}
+
+test("CA01: aberta antes da meia-noite, sem mexer na data, grava o dia novo do aparelho", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-24T23:59:30"));
+  await page.goto("./#registro");
+  await expect(campoData(page)).toHaveValue("2026-11-24");
+  await page.clock.setFixedTime(new Date("2026-11-25T00:00:30"));
+  await salvarSemData(page, "Vôlei", "1");
+  await expect(lista(page)).toHaveText([/Vôlei\s*1 h/]);
+  await expect(campoData(page)).toHaveValue("2026-11-25");
+  expect((await salvas(page)).map((a) => a.data)).toEqual(["2026-11-25"]);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("CA01: data escolhida à mão antes da meia-noite é mantida depois dela", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-24T23:59:30"));
+  await page.goto("./#registro");
+  await campoData(page).fill("2026-11-23");
+  await page.clock.setFixedTime(new Date("2026-11-25T00:00:30"));
+  await salvarSemData(page, "Vôlei", "1");
+  await expect(campoData(page)).toHaveValue("2026-11-23");
+  await expect(lista(page)).toHaveText([/Vôlei\s*1 h/]);
+  expect((await salvas(page)).map((a) => a.data)).toEqual(["2026-11-23"]);
+});
+
+// CA02 (RAFA-228): entradas guardadas inválidas vão para backup antes da regravação.
+test("CA02: entradas inválidas vão para backup e válidas e o registro novo ficam visíveis", async ({ page }) => {
+  const validas = [{ id: "v", data: "2026-11-24", nome: "Futebol", horas: 2 }];
+  const invalidas = [
+    { id: "x", data: "ontem", nome: "Corrida", horas: 1 },
+    { id: "y", data: "2026-11-24", nome: "Natação" },
+    { id: "z", data: "2026-11-24", nome: "Remo", horas: "1" },
+  ];
+  await page.clock.setFixedTime(new Date("2026-11-24T10:00:00"));
+  await page.goto("./#registro");
+  await page.evaluate(([k, v]) => localStorage.setItem(k, v), [KEY_ATIVIDADES, JSON.stringify([...validas, ...invalidas])]);
+  await page.reload();
+  await expect(lista(page)).toHaveText([/Futebol\s*2 h/]);
+  await salvarSemData(page, "Vôlei", "1,5");
+  await expect(lista(page)).toHaveText([/Futebol\s*2 h/, /Vôlei\s*1,5 h/]);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  const backups = await page.evaluate((k) => {
+    const chaves = Object.keys(localStorage).filter((c) => c.startsWith(`${k}:backup:`));
+    return chaves.map((c) => JSON.parse(localStorage.getItem(c)!) as unknown);
+  }, KEY_ATIVIDADES);
+  expect(backups).toEqual([invalidas]);
+  expect((await salvas(page)).map((a) => a.nome)).toEqual(["Futebol", "Vôlei"]);
+  await page.reload();
+  await expect(lista(page)).toHaveText([/Futebol\s*2 h/, /Vôlei\s*1,5 h/]);
+});

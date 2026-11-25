@@ -326,10 +326,11 @@ Tela para ver, editar ou restaurar backup; migração de `treino-pwa:registro:v1
 ### Tarefas
 
 - [x] SDD desta seção antes do código.
-- [ ] `src/lib/backup.ts`; `adicionar()` com backup das entradas inválidas e testes em `src/lib/atividades.test.ts` (item inválido, campo ausente, tipo errado, backup antes da regravação, backup sem sobrescrever, falha do backup sem regravar).
-- [ ] `ler()` e `recomecar()` da dor com testes em `src/lib/dor.test.ts`.
-- [ ] Registro com a data do dia do aparelho e Recomeçar anotações de dor em `src/app.tsx`.
-- [ ] `tests/registro.spec.ts` e `tests/dor.spec.ts` (WebKit iPhone 15 e Chromium, 390×844, relógio do Playwright): virada do dia, data manual mantida, backup das inválidas com as válidas e o registro novo visíveis, Recomeçar anotações de dor (abertura sem alerta, confirmação, Cancelar sem gravar, backup, saída do alerta) e lição 12 (dblclick, dois toques com 150 ms, Enter duplo, foco de volta ao gatilho).
+- [x] `src/lib/backup.ts`; `adicionar()` com backup das entradas inválidas e testes em `src/lib/atividades.test.ts` (item inválido, campo ausente, tipo errado, backup antes da regravação, backup sem sobrescrever, falha do backup sem regravar).
+- [x] `ler()` e `recomecar()` da dor com testes em `src/lib/dor.test.ts`.
+- [x] Registro com a data do dia do aparelho e Recomeçar anotações de dor em `src/app.tsx`.
+- [x] `tests/registro.spec.ts` e `tests/dor.spec.ts` (WebKit iPhone 15 e Chromium, 390×844, relógio do Playwright): virada do dia, data manual mantida, backup das inválidas com as válidas e o registro novo visíveis, Recomeçar anotações de dor (abertura sem alerta, confirmação, Cancelar sem gravar, backup, saída do alerta) e lição 12 (dblclick, dois toques com 150 ms, Enter duplo, foco de volta ao gatilho).
+- [x] Prova de vermelho de cada guarda nova (virada do dia, data manual, entradas inválidas, ordem e sufixo do backup, chave de dor ilegível, saída do alerta e lição 12), registrada no Verification do PR.
 - [ ] Revisão no head exato e merge pelo responsável.
 
 ### Gates
