@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { adicionar, carregar, formatHoras, type Atividade } from "./atividades";
+import { KEY, adicionar, carregar, formatHoras, type Atividade } from "./atividades";
 import { doPlano, horas, progresso } from "./estatisticas";
 import { agenda, iniciar, marcarFeito } from "./plano";
 
@@ -34,6 +34,49 @@ describe("horas por atividade (CA01)", () => {
     const r = horas([reg("Alongamento", 0.1), reg("Alongamento", 0.2), reg("Treino 1", 0.1), reg("Treino 2", 0.2)]);
     expect(r.livres).toEqual([{ nome: "Alongamento", horas: 0.3 }]);
     expect(r.plano).toBe(0.3);
+  });
+});
+
+describe("RAFA-229: mesmo nome numa linha só", () => {
+  it("CA01: Vôlei, vôlei e ' Vôlei ' viram uma única linha com a soma das horas", () => {
+    const r = horas([reg("Vôlei", 1, "2026-11-22"), reg("vôlei", 1.5, "2026-11-23"), reg(" Vôlei ", 0.25, "2026-11-24")]);
+    expect(r.livres).toHaveLength(1);
+    expect(r.livres[0].horas).toBe(2.75);
+  });
+
+  it("CA01: o rótulo é o do registro mais recente pela data; no mesmo dia, o último da lista", () => {
+    expect(horas([reg("VÔLEI", 1, "2026-11-24"), reg("vôlei", 1, "2026-11-22")]).livres).toEqual([
+      { nome: "VÔLEI", horas: 2 },
+    ]);
+    expect(horas([reg("vôlei", 1, "2026-11-24"), reg("Vôlei", 1, "2026-11-24")]).livres).toEqual([
+      { nome: "Vôlei", horas: 2 },
+    ]);
+  });
+
+  it("CA01: o rótulo do mais recente sai sem os espaços das pontas", () => {
+    const r = horas([reg("vôlei", 1, "2026-11-22"), reg("  Vôlei de praia ", 1, "2026-11-24"), reg("vôlei de praia", 1, "2026-11-23")]);
+    expect(r.livres).toEqual([
+      { nome: "Vôlei de praia", horas: 2 },
+      { nome: "vôlei", horas: 1 },
+    ]);
+  });
+
+  it("fora de escopo: acentos seguem separados (Volei e Vôlei são duas linhas)", () => {
+    expect(horas([reg("volei", 1, "2026-11-22"), reg("Vôlei", 2), reg("Volei", 1)]).livres).toEqual([
+      { nome: "Volei", horas: 2 },
+      { nome: "Vôlei", horas: 2 },
+    ]);
+  });
+
+  it("CA02: os registros ficam como foram guardados; só a leitura agrupa", () => {
+    const storage = memoria();
+    const guardados = [reg("Vôlei", 1, "2026-11-22"), reg("vôlei", 1, "2026-11-23"), reg(" Vôlei ", 1, "2026-11-24")];
+    storage.setItem(KEY, JSON.stringify(guardados));
+    const antes = storage.getItem(KEY);
+    const lidos = carregar(storage);
+    expect(horas(lidos).livres).toEqual([{ nome: "Vôlei", horas: 3 }]);
+    expect(lidos.map((a) => a.nome)).toEqual(["Vôlei", "vôlei", " Vôlei "]);
+    expect(storage.getItem(KEY)).toBe(antes);
   });
 });
 
