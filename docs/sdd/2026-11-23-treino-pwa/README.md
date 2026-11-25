@@ -219,7 +219,7 @@ Editor do plano pela UI, validação clínica, reiniciar ou trocar a data D de u
 
 Issue: [RAFA-184](https://linear.app/rafagg/issue/RAFA-184/05-registrar-dor-ou-desconforto-e-o-historico). Contrato: [CA04-1 a CA04-4 do card da RAFA-184](https://linear.app/rafagg/issue/RAFA-184/05-registrar-dor-ou-desconforto-e-o-historico), sem reescrita, com as decisões do Mane · Spec de 24/11/2026 22:05. Cobre o [CA04 da RAFA-176](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia).
 
-**Ícones: P1, aguardando o Rafael.** A lista em uso é a proposta do card: Dor muscular, Dor articular, Dor nas costas, Cãibra, Falta de ar ou tontura e Outro. Ela fica fixa num único lugar, `ICONES` em `src/lib/dor.ts` (id, nome e ícone Remix), e pode ser trocada sem mexer nos CAs. O merge do PR depende da confirmação do conjunto pelo Rafael, além do Bari APROVADO no head exato e do check local.
+**Ícones:** os 6 do CA04-1, nessa ordem: Dor muscular, Dor articular, Dor nas costas, Cãibra, Falta de ar ou tontura e Outro, todos com texto livre opcional. A lista fica fixa num único lugar, `ICONES` em `src/lib/dor.ts` (id, nome e ícone Remix). O merge do PR depende do Bari APROVADO no head exato e do check local.
 
 ### Design
 
@@ -242,7 +242,6 @@ Editar ou apagar anotação, vínculo com atividade, exportar ou compartilhar re
 - [x] Tela Dor em `src/app.tsx`.
 - [x] `tests/dor.spec.ts` (WebKit iPhone 15 e Chromium, 390×844, relógio do Playwright): CA04-1 com hoje por padrão, sem atividade no dia e reabertura; CA04-1 em data escolhida com atividade; CA04-3; CA04-4; CA04-2 (nada marcado, texto só com espaços, ícone marcado e desmarcado); data vazia; dblclick, dois toques com 150 ms e Enter duplo no Salvar gravando uma anotação só; conteúdo ilegível não sobrescrito; alvos de 44 px e sem rolagem horizontal.
 - [x] `tests/plano.spec.ts`: o Cancelar do `Recomeçar plano` é descrito pelo título.
-- [ ] Confirmação do conjunto de ícones pelo Rafael (P1).
 - [ ] Revisão Bari no head exato e merge pelo responsável.
 
 ### Gates

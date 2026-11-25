@@ -14,10 +14,10 @@ import { hoje } from "./atividades";
 export const KEY = "treino-pwa:dor:v1";
 
 /**
- * Conjunto predefinido de ícones: proposta do card RAFA-184, ainda P1,
- * aguardando o Rafael. Lista fixa só aqui (nome e ícone); trocar não mexe nos
- * CAs. O `id` é o que fica salvo; anotações com id fora da lista continuam
- * salvas e aparecem no histórico pelo próprio id.
+ * Os 6 ícones do CA04-1 da RAFA-184, nessa ordem, todos com texto livre
+ * opcional. Lista fixa só aqui (nome e ícone). O `id` é o que fica salvo;
+ * anotações com id fora da lista continuam salvas e aparecem no histórico
+ * pelo próprio id.
  */
 export const ICONES = [
   { id: "muscular", nome: "Dor muscular", icone: RiBodyScanLine },

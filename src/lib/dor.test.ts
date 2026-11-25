@@ -14,7 +14,7 @@ function memoria(inicial?: Record<string, string>) {
 }
 
 describe("ícones", () => {
-  it("lista fixa da proposta do card (P1)", () => {
+  it("lista fixa com os 6 ícones do CA04-1, nessa ordem", () => {
     expect(ICONES.map((i) => i.nome)).toEqual([
       "Dor muscular",
       "Dor articular",
