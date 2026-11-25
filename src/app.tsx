@@ -9,7 +9,6 @@ import {
   RiEditLine,
   RiFirstAidKitLine,
   RiHome5Line,
-  RiTimeLine,
   type RemixiconComponentType,
 } from "@remixicon/react";
 import { StatCards } from "@/components/application/dashboard/stat-cards";
@@ -19,6 +18,7 @@ import { Input } from "@/components/base/input/input";
 import { Tab, TabList, TabPanel, Tabs } from "@/components/base/tabs/tabs";
 import { adicionar, carregar, doDia, formatHoras, hoje, parseHoras, type Atividade } from "./lib/atividades";
 import * as dorLocal from "./lib/dor";
+import { horas as somarHoras, progresso } from "./lib/estatisticas";
 import { ICONES, historico, vazia, type Anotacao } from "./lib/dor";
 import * as planoLocal from "./lib/plano";
 import { TOTAL, agenda, treinoDoDia, type Plano } from "./lib/plano";
@@ -387,6 +387,47 @@ function Registro({ atividades, onSaved }: { atividades: Atividade[]; onSaved: (
   );
 }
 
+function LinhaHoras({ nome, horas }: { nome: string; horas: number }) {
+  return (
+    <li className="flex min-h-11 items-center justify-between gap-3">
+      <span className="text-body-medium break-words">{nome}</span>
+      <Chip color="gray">{formatHoras(horas)}</Chip>
+    </li>
+  );
+}
+
+// CA01 a CA05 (RAFA-185): horas por atividade, a linha do plano de calistenia
+// e o progresso, calculados do mesmo estado que Início, Registro e Plano usam.
+function Estatisticas({ atividades, plano }: { atividades: Atividade[]; plano: Plano | null }) {
+  const { plano: horasPlano, livres } = somarHoras(atividades);
+  const { feitos, total } = progresso(plano);
+  return (
+    <>
+      <StatCards
+        columns={1}
+        stats={[{ icon: RiCheckLine, label: "Treinos", value: String(feitos), delta: `de ${total}`, deltaColor: "neutral" }]}
+      />
+      {(horasPlano > 0 || livres.length > 0) && (
+        <section className={CARD} aria-label="Horas">
+          {horasPlano > 0 && (
+            <ul data-testid="horas-plano" className="flex flex-col gap-2">
+              <LinhaHoras nome="Plano de calistenia" horas={horasPlano} />
+            </ul>
+          )}
+          {horasPlano > 0 && livres.length > 0 && <hr className="border-separator-border" />}
+          {livres.length > 0 && (
+            <ul data-testid="horas-livres" className="flex flex-col gap-2">
+              {livres.map((linha) => (
+                <LinhaHoras key={linha.nome} {...linha} />
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+    </>
+  );
+}
+
 // CA04 (RAFA-176), CA04-1 a CA04-4 (RAFA-184): dor ou desconforto do dia, com
 // ícones da lista fixa e/ou texto livre, e o histórico dos dias com dor.
 function Dor({ dores, onSaved }: { dores: Anotacao[]; onSaved: (lista: Anotacao[]) => void }) {
@@ -528,7 +569,7 @@ export function App() {
     setScreen(id);
     history.replaceState(null, "", id === "inicio" ? location.pathname : `#${id}`);
   };
-  // Telas sem feature: placeholders com StatCards reais; dados chegam nas RAFA-185 e 186.
+  // Lembretes segue placeholder com StatCards reais; dados chegam na RAFA-186.
   const content: Record<ScreenId, ReactNode> = {
     inicio: (
       <Inicio
@@ -549,15 +590,7 @@ export function App() {
     registro: <Registro atividades={atividades} onSaved={setAtividades} />,
     plano: <PlanoTela salvo={salvo} dia={dia} onIniciado={setPlano} />,
     dor: <Dor dores={dores} onSaved={setDores} />,
-    estatisticas: (
-      <StatCards
-        columns={2}
-        stats={[
-          { icon: RiCheckLine, label: "Treinos", value: "0", delta: "de 28", deltaColor: "neutral" },
-          { icon: RiTimeLine, label: "Horas", value: "0", delta: "Total", deltaColor: "neutral" },
-        ]}
-      />
-    ),
+    estatisticas: <Estatisticas atividades={atividades} plano={salvo.plano} />,
     lembretes: (
       <StatCards
         columns={1}

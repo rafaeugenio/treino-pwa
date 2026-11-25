@@ -1,4 +1,4 @@
-# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182, RAFA-183 e RAFA-184
+# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182, RAFA-183, RAFA-184 e RAFA-185
 
 ## Spec
 
@@ -247,3 +247,32 @@ Editar ou apagar anotação, vínculo com atividade, exportar ou compartilhar re
 ### Gates
 
 `npm run check` com HOME falso (`rafa184-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.
+
+## RAFA-185: estatísticas de horas e progresso
+
+Issue: [RAFA-185](https://linear.app/rafagg/issue/RAFA-185/06-exibir-estatisticas-de-horas-e-progresso). Contrato: [CA01 a CA05 do card da RAFA-185](https://linear.app/rafagg/issue/RAFA-185/06-exibir-estatisticas-de-horas-e-progresso), sem reescrita, com o CA02 completado pelo Mane · Spec em 25/11/2026 00:10 (regra do nome exato). Cobre o [CA05 da RAFA-176](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia).
+
+### Design
+
+- Cálculo puro em `src/lib/estatisticas.ts`, sem chave nova nem gravação: lê a mesma lista de atividades e o mesmo plano que `src/app.tsx` já mantém em estado para Início, Registro e Plano. Salvar no Registro ou marcar Feito no Início atualiza esse estado, então Estatísticas mostra os totais novos sem recarregar o app (CA05).
+- Treino do plano (CA02): todo registro cujo nome é exatamente um de `TREINOS` (`Treino 1` a `Treino 28`), inclusive os de um plano anterior ao Recomeçar e um `Treino N` digitado no Registro. Limitação aceita no CA02. Esses registros somam numa linha só, `Plano de calistenia`, que aparece só quando a soma passa de 0 h.
+- Atividades livres (CA01): os demais registros, agrupados pelo nome salvo (já sem espaços nas pontas), do maior para o menor total; empate em ordem alfabética pt-BR, para a ordem não depender da ordem de gravação.
+- Soma em centésimos inteiros e formato com `formatHoras` (pt-BR, vírgula): `0,1 h + 0,2 h` mostra `0,3 h`.
+- Progresso (CA03): `K de 28`, com K = treinos marcados como feitos no plano válido salvo. Dia deslizado não entra em `feitos`. Sem plano ou com plano ilegível, `0 de 28`.
+- Tela Estatísticas: StatCards Board UI `Treinos` com `K` e `de 28`; abaixo, com dados, um card com a linha `Plano de calistenia` no topo, separada por um divisor das linhas das atividades livres (`data-testid="horas-plano"` e `data-testid="horas-livres"`), cada linha com nome e Chip das horas. Sem dados (CA04), só o StatCards com `0 de 28`: nenhuma linha e nenhum texto de ajuda.
+- Dados no aparelho: tudo o que o app guarda (atividades, plano e dor) fica só no `localStorage` deste aparelho, sem backend. Para apagar tudo, inclusive a dor, basta remover o app da Tela de Início ou limpar os dados do site no Safari. O app não tem tela nem botão de exclusão (decisão do Rafael em 24/11/2026 23:49, registrada na RAFA-184).
+
+### Fora desta entrega
+
+Exportar relatório, Apple Saúde, Strava e wearables, gráficos, filtros por período, sequências (streaks), estatísticas de dor, metas de horas, exclusão de dados pelo app e o CA06 (Lembretes, RAFA-186), que segue placeholder.
+
+### Tarefas
+
+- [x] `src/lib/estatisticas.ts` e `src/lib/estatisticas.test.ts`: CA01 (soma, ordem, empate, vírgula), CA02 (nome exato, inclusive de plano anterior e digitado à mão; nomes parecidos ficam livres; linha só acima de 0 h), soma em centésimos, CA03 (K, deslize, sem plano) e CA04.
+- [x] Tela Estatísticas em `src/app.tsx`, com o estado já existente.
+- [x] `tests/estatisticas.spec.ts` (WebKit iPhone 15 e Chromium, 390×844): CA01, CA02, CA03 com deslize, CA03 com plano ilegível, CA04, CA05 pelo Registro e pelo Feito sem recarregar, alvos de 44 px e sem rolagem horizontal.
+- [ ] Revisão Bari no head exato e merge pelo responsável.
+
+### Gates
+
+`npm run check` com HOME falso (`rafa185-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.
