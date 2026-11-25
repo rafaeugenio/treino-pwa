@@ -12,6 +12,10 @@ function memoria(inicial?: Record<string, string>) {
       gravadas.push(key);
       data.set(key, value);
     },
+    key: (i: number) => [...data.keys()][i] ?? null,
+    get length() {
+      return data.size;
+    },
   };
 }
 
@@ -160,10 +164,11 @@ describe("chave de atividades corrompida por inteiro", () => {
     expect(backups(storage)).toEqual({ [CHAVE]: "{" });
   });
 
-  it("backup existente com o mesmo conteúdo permanece, e o bruto novo também fica", () => {
+  it("backup existente com o mesmo conteúdo permanece e não ganha duplicata (L1)", () => {
     const storage = memoria({ [KEY]: "{", [CHAVE]: "{" });
     adicionar(storage, nova, "n", AGORA);
-    expect(backups(storage)).toEqual({ [CHAVE]: "{", [`${CHAVE}-2`]: "{" });
+    expect(backups(storage)).toEqual({ [CHAVE]: "{" });
+    expect(storage.gravadas).toEqual([KEY]);
   });
 
   it("backup existente com outro conteúdo não é sobrescrito; o bruto novo vai para uma chave livre", () => {
@@ -197,5 +202,62 @@ describe("chave de atividades corrompida por inteiro", () => {
     };
     expect(() => adicionar(storage, nova, "n", AGORA)).toThrow("quota");
     expect(data.get(KEY)).toBe("{");
+  });
+});
+
+// CA05 e L1 da RAFA-228: sem backup não há gravação; nova tentativa sem duplicata.
+describe("backup que não pode ser gravado", () => {
+  const AGORA = new Date("2026-11-25T03:00:30.000Z");
+  const DEPOIS = new Date("2026-11-25T03:01:00.000Z");
+  const nova = { data: "2026-11-25", nome: "Futebol", horas: 2 };
+  const valida = { id: "v", data: "2026-11-24", nome: "Vôlei", horas: 1.5 };
+  const invalida = { id: "x", data: "ontem", nome: "Corrida", horas: 1 };
+  /** Memória em que só as chaves aceitas por `aceita` podem ser gravadas. */
+  function cheia(inicial: Record<string, string>, aceita: (key: string) => boolean) {
+    const storage = memoria(inicial);
+    const setItem = storage.setItem;
+    storage.setItem = (key, value) => {
+      if (!aceita(key)) throw new DOMException("cota", "QuotaExceededError");
+      setItem(key, value);
+    };
+    return storage;
+  }
+  const backups = (storage: ReturnType<typeof memoria>) => [...storage.data.keys()].filter((k) => k.startsWith(BACKUP));
+
+  for (const caso of [
+    { titulo: "JSON inválido (CA04)", bruto: "{" },
+    { titulo: "JSON que não é lista (CA04)", bruto: '{"a":1}' },
+    { titulo: "entradas inválidas (CA02)", bruto: JSON.stringify([valida, invalida]) },
+  ]) {
+    it(`cota cheia no backup, ${caso.titulo}: lança e a chave fica intacta`, () => {
+      const storage = cheia({ [KEY]: caso.bruto }, (key) => !key.startsWith(BACKUP));
+      expect(() => adicionar(storage, nova, "n", AGORA)).toThrow("cota");
+      expect(storage.data.get(KEY)).toBe(caso.bruto);
+      expect(backups(storage)).toEqual([]);
+    });
+
+    it(`nova tentativa depois de a lista falhar, ${caso.titulo}: um backup só, com o texto inteiro`, () => {
+      let listaFalha = true;
+      const storage = cheia({ [KEY]: caso.bruto }, (key) => key !== KEY || !listaFalha);
+      expect(() => adicionar(storage, nova, "n", AGORA)).toThrow("cota");
+      expect(storage.data.get(KEY)).toBe(caso.bruto);
+      expect(() => adicionar(storage, nova, "n", DEPOIS)).toThrow("cota");
+      expect(backups(storage)).toHaveLength(1);
+      listaFalha = false;
+      adicionar(storage, nova, "n", DEPOIS);
+      expect(backups(storage)).toHaveLength(1);
+      const copia = storage.data.get(backups(storage)[0])!;
+      expect(copia).toBe(caso.bruto === JSON.stringify([valida, invalida]) ? JSON.stringify([invalida]) : caso.bruto);
+      expect(carregar(storage).map((a) => a.id)).toContain("n");
+    });
+  }
+
+  it("colisão de instante com outro conteúdo usa o sufixo e guarda o bruto inteiro", () => {
+    const longo = `{${"x".repeat(5000)}`;
+    const chave = `${BACKUP}${AGORA.toISOString()}`;
+    const storage = memoria({ [KEY]: longo, [chave]: "anterior" });
+    adicionar(storage, nova, "n", AGORA);
+    expect(storage.data.get(chave)).toBe("anterior");
+    expect(storage.data.get(`${chave}-2`)).toBe(longo);
   });
 });

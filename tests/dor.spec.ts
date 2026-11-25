@@ -336,3 +336,95 @@ test("CA03: Cancelar devolve o foco ao Recomeçar anotações de dor", async ({ 
   await cancelar.click();
   await expect(recomecar(page)).toBeFocused();
 });
+
+// CA05 e L1 da RAFA-228: cota simulada no navegador. "backup" recusa as chaves
+// de backup; "lista" recusa a chave da lista; null volta ao normal. Também
+// registra a ordem das gravações em window.__gravadas.
+async function cota(page: Page, regra: "backup" | "lista" | null) {
+  await page.evaluate((r) => {
+    const w = window as unknown as { __falha: string | null; __gravadas: string[]; __original?: Storage["setItem"] };
+    w.__falha = r;
+    if (w.__original) return;
+    w.__gravadas = [];
+    const original = Storage.prototype.setItem;
+    w.__original = original;
+    Storage.prototype.setItem = function (k: string, v: string) {
+      const backup = k.includes(":backup:");
+      if ((w.__falha === "backup" && backup) || (w.__falha === "lista" && !backup))
+        throw new DOMException("cota", "QuotaExceededError");
+      w.__gravadas.push(k);
+      return original.call(this, k, v);
+    };
+  }, regra);
+}
+const gravadas = (page: Page) => page.evaluate(() => (window as unknown as { __gravadas: string[] }).__gravadas);
+
+const confirmar = (page: Page) => page.getByRole("button", { name: "Confirmar", exact: true });
+const backupsComChave = (page: Page) =>
+  page.evaluate((k) => {
+    const chaves = Object.keys(localStorage).filter((c) => c.startsWith(`${k}:backup:`)).sort();
+    return chaves.map((c) => [c, localStorage.getItem(c)] as const);
+  }, KEY_DOR);
+
+test("CA05 na dor: sem espaço para o backup, alerta e chave intacta, sem travar", async ({ page }) => {
+  await abrirIlegivel(page);
+  await cota(page, "backup");
+  await recomecar(page).click();
+  await confirmar(page).click();
+  await expect(page.getByRole("alert")).toHaveText("Não foi possível salvar neste dispositivo.");
+  expect(await lerDor(page)).toBe("{");
+  expect(await backupsDor(page)).toEqual([]);
+  // A tela não trava: a confirmação continua com Cancelar e Confirmar ativos.
+  await expect(page.getByRole("button", { name: "Cancelar", exact: true })).toBeEnabled();
+  await cota(page, null);
+  await confirmar(page).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(recomecar(page)).toHaveCount(0);
+  expect(await backupsDor(page)).toEqual(["{"]);
+  expect(await lerDor(page)).toBe("[]");
+});
+
+test("CA05 na dor: depois do alerta, Cancelar volta ao Recomeçar sem gravar", async ({ page }) => {
+  await abrirIlegivel(page);
+  await cota(page, "backup");
+  await recomecar(page).click();
+  await confirmar(page).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(recomecar(page)).toBeFocused();
+  expect(await lerDor(page)).toBe("{");
+  expect(await backupsDor(page)).toEqual([]);
+});
+
+test("L1 na dor: nova tentativa depois de a lista falhar não duplica o backup", async ({ page }) => {
+  await abrirIlegivel(page);
+  await cota(page, "lista");
+  await recomecar(page).click();
+  await confirmar(page).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.clock.setFixedTime(new Date(`${HOJE}T10:01:00`));
+  await confirmar(page).click();
+  expect(await lerDor(page)).toBe("{");
+  expect(await backupsDor(page)).toEqual(["{"]);
+  await cota(page, null);
+  await confirmar(page).click();
+  await expect(recomecar(page)).toHaveCount(0);
+  expect(await backupsDor(page)).toEqual(["{"]);
+  expect(await lerDor(page)).toBe("[]");
+});
+
+test("L2 na dor: colisão de instante usa o sufixo e o backup vem antes da lista nova", async ({ page }) => {
+  const longo = `{${"x".repeat(5000)}`;
+  await abrirIlegivel(page, longo);
+  await page.evaluate((k) => localStorage.setItem(`${k}:backup:${new Date().toISOString()}`, "anterior"), KEY_DOR);
+  await cota(page, null);
+  await recomecar(page).click();
+  await confirmar(page).click();
+  await expect(recomecar(page)).toHaveCount(0);
+  const base = `${KEY_DOR}:backup:${await page.evaluate(() => new Date().toISOString())}`;
+  expect(await backupsComChave(page)).toEqual([
+    [base, "anterior"],
+    [`${base}-2`, longo],
+  ]);
+  expect(await gravadas(page)).toEqual([`${base}-2`, KEY_DOR]);
+});

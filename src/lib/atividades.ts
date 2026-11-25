@@ -1,6 +1,6 @@
 // Atividades diárias (CA01 da RAFA-176): data, nome e horas, só no aparelho.
 // Chave nova: o texto demonstrativo de treino-pwa:registro:v1 não é migrado.
-import { chaveBackup } from "./backup";
+import { guardarBackup, type StorageBackup } from "./backup";
 
 export const KEY = "treino-pwa:atividades:v1";
 /** CA02 da RAFA-228: prefixo das chaves com as entradas inválidas guardadas. */
@@ -58,11 +58,11 @@ export function carregar(storage: Pick<Storage, "getItem">): Atividade[] {
  * Grava uma atividade nova e devolve a lista completa. CA02 da RAFA-228:
  * entradas salvas que não passam em `valida` vão para uma chave de backup antes
  * da regravação. CA04: conteúdo salvo que não é lista JSON vai inteiro, bruto,
- * para uma chave de backup antes da gravação. Se o backup falhar, nada é
- * regravado. Falha de quota propaga.
+ * para uma chave de backup antes da gravação. CA05: se o backup falhar, nada é
+ * regravado e o erro propaga. L1: backup de mesmo conteúdo não é repetido.
  */
 export function adicionar(
-  storage: Pick<Storage, "getItem" | "setItem">,
+  storage: StorageBackup,
   nova: Omit<Atividade, "id">,
   id: string = crypto.randomUUID(),
   agora: Date = new Date(),
@@ -70,9 +70,9 @@ export function adicionar(
   const atividade: Atividade = { ...nova, id, nome: nova.nome.trim() };
   if (!valida(atividade)) throw new Error("atividade inválida");
   const bruto = storage.getItem(KEY);
-  if (bruto && naoLista(bruto)) storage.setItem(chaveBackup(storage, BACKUP, agora), bruto);
+  if (bruto && naoLista(bruto)) guardarBackup(storage, BACKUP, bruto, agora);
   const invalidas = salvas(storage).filter((item) => !valida(item));
-  if (invalidas.length) storage.setItem(chaveBackup(storage, BACKUP, agora), JSON.stringify(invalidas));
+  if (invalidas.length) guardarBackup(storage, BACKUP, JSON.stringify(invalidas), agora);
   const lista = [...carregar(storage), atividade];
   storage.setItem(KEY, JSON.stringify(lista));
   return lista;

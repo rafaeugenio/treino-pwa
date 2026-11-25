@@ -10,6 +10,10 @@ function memoria(inicial?: Record<string, string>) {
     setItem: (key: string, value: string) => {
       data.set(key, value);
     },
+    key: (i: number) => [...data.keys()][i] ?? null,
+    get length() {
+      return data.size;
+    },
   };
 }
 
@@ -176,5 +180,52 @@ describe("recomeçar anotações de dor", () => {
     };
     expect(() => recomecar(storage, AGORA)).toThrow("quota");
     expect(data.get(KEY)).toBe("{");
+  });
+});
+
+// CA05 e L1 da RAFA-228 na dor: sem backup não há lista nova; nova tentativa sem duplicata.
+describe("recomeçar sem espaço para o backup", () => {
+  const AGORA = new Date("2026-11-25T03:00:30.000Z");
+  const DEPOIS = new Date("2026-11-25T03:01:00.000Z");
+  const backups = (storage: ReturnType<typeof memoria>) => [...storage.data.keys()].filter((k) => k.startsWith(BACKUP));
+  function cheia(inicial: Record<string, string>, aceita: (key: string) => boolean) {
+    const storage = memoria(inicial);
+    const setItem = storage.setItem;
+    storage.setItem = (key, value) => {
+      if (!aceita(key)) throw new DOMException("cota", "QuotaExceededError");
+      setItem(key, value);
+    };
+    return storage;
+  }
+
+  for (const bruto of ["{", '{"a":1}']) {
+    it(`cota cheia no backup (${bruto}): lança e a chave ilegível fica intacta`, () => {
+      const storage = cheia({ [KEY]: bruto }, (key) => !key.startsWith(BACKUP));
+      expect(() => recomecar(storage, AGORA)).toThrow("cota");
+      expect(storage.data.get(KEY)).toBe(bruto);
+      expect(backups(storage)).toEqual([]);
+    });
+
+    it(`nova tentativa depois de a lista falhar (${bruto}): um backup só`, () => {
+      let listaFalha = true;
+      const storage = cheia({ [KEY]: bruto }, (key) => key !== KEY || !listaFalha);
+      expect(() => recomecar(storage, AGORA)).toThrow("cota");
+      expect(() => recomecar(storage, DEPOIS)).toThrow("cota");
+      expect(storage.data.get(KEY)).toBe(bruto);
+      expect(backups(storage)).toHaveLength(1);
+      listaFalha = false;
+      recomecar(storage, DEPOIS);
+      expect(backups(storage).map((k) => storage.data.get(k))).toEqual([bruto]);
+      expect(storage.data.get(KEY)).toBe("[]");
+    });
+  }
+
+  it("colisão de instante com outro conteúdo usa o sufixo e guarda o texto inteiro", () => {
+    const longo = `{${"x".repeat(5000)}`;
+    const chave = `${BACKUP}${AGORA.toISOString()}`;
+    const storage = memoria({ [KEY]: longo, [chave]: "anterior" });
+    recomecar(storage, AGORA);
+    expect(storage.data.get(chave)).toBe("anterior");
+    expect(storage.data.get(`${chave}-2`)).toBe(longo);
   });
 });

@@ -168,3 +168,95 @@ test("CA04: conteúdo que não é lista vai para backup e o registro novo fica s
   await page.reload();
   await expect(lista(page)).toHaveText([/Vôlei\s*1,5 h/]);
 });
+
+// CA05 e L1 da RAFA-228: cota simulada no navegador. "backup" recusa as chaves
+// de backup; "lista" recusa a chave da lista; null volta ao normal. Também
+// registra a ordem das gravações em window.__gravadas.
+async function cota(page: Page, regra: "backup" | "lista" | null) {
+  await page.evaluate((r) => {
+    const w = window as unknown as { __falha: string | null; __gravadas: string[]; __original?: Storage["setItem"] };
+    w.__falha = r;
+    if (w.__original) return;
+    w.__gravadas = [];
+    const original = Storage.prototype.setItem;
+    w.__original = original;
+    Storage.prototype.setItem = function (k: string, v: string) {
+      const backup = k.includes(":backup:");
+      if ((w.__falha === "backup" && backup) || (w.__falha === "lista" && !backup))
+        throw new DOMException("cota", "QuotaExceededError");
+      w.__gravadas.push(k);
+      return original.call(this, k, v);
+    };
+  }, regra);
+}
+const gravadas = (page: Page) => page.evaluate(() => (window as unknown as { __gravadas: string[] }).__gravadas);
+
+const ERRO = "Não foi possível salvar neste dispositivo.";
+const backupsAtividades = (page: Page) =>
+  page.evaluate((k) => {
+    const chaves = Object.keys(localStorage).filter((c) => c.startsWith(`${k}:backup:`)).sort();
+    return chaves.map((c) => [c, localStorage.getItem(c)] as const);
+  }, KEY_ATIVIDADES);
+const brutoAtividades = (page: Page) => page.evaluate((k) => localStorage.getItem(k), KEY_ATIVIDADES);
+async function abrirRegistroCom(page: Page, bruto: string) {
+  await page.clock.setFixedTime(new Date("2026-11-24T10:00:00"));
+  await page.goto("./#registro");
+  await page.evaluate(([k, v]) => localStorage.setItem(k, v), [KEY_ATIVIDADES, bruto]);
+  await page.reload();
+}
+const brutoCA02 = JSON.stringify([
+  { id: "v", data: "2026-11-24", nome: "Futebol", horas: 2 },
+  { id: "x", data: "ontem", nome: "Corrida", horas: 1 },
+]);
+
+for (const caso of [
+  { titulo: "CA04 (não é lista)", bruto: "{", copia: "{" },
+  { titulo: "CA02 (entrada inválida)", bruto: brutoCA02, copia: JSON.stringify([{ id: "x", data: "ontem", nome: "Corrida", horas: 1 }]) },
+]) {
+  test(`CA05 no Registro, ${caso.titulo}: sem espaço para o backup, alerta e chave intacta, sem travar`, async ({ page }) => {
+    await abrirRegistroCom(page, caso.bruto);
+    await cota(page, "backup");
+    await salvarSemData(page, "Vôlei", "1,5");
+    await expect(page.getByRole("alert")).toHaveText(ERRO);
+    expect(await brutoAtividades(page)).toBe(caso.bruto);
+    expect(await backupsAtividades(page)).toEqual([]);
+    // A tela não trava: o formulário guarda o que foi digitado e o novo Salvar funciona.
+    await expect(page.getByRole("textbox", { name: "Atividade", exact: true })).toHaveValue("Vôlei");
+    await cota(page, null);
+    await page.getByRole("button", { name: "Salvar", exact: true }).click();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(lista(page).filter({ hasText: "Vôlei" })).toHaveCount(1);
+    expect((await backupsAtividades(page)).map(([, v]) => v)).toEqual([caso.copia]);
+  });
+
+  test(`L1 no Registro, ${caso.titulo}: nova tentativa depois de a lista falhar não duplica o backup`, async ({ page }) => {
+    await abrirRegistroCom(page, caso.bruto);
+    await cota(page, "lista");
+    await salvarSemData(page, "Vôlei", "1,5");
+    await expect(page.getByRole("alert")).toHaveText(ERRO);
+    await page.clock.setFixedTime(new Date("2026-11-24T10:01:00"));
+    await page.getByRole("button", { name: "Salvar", exact: true }).click();
+    await expect(page.getByRole("alert")).toHaveText(ERRO);
+    expect(await brutoAtividades(page)).toBe(caso.bruto);
+    expect((await backupsAtividades(page)).map(([, v]) => v)).toEqual([caso.copia]);
+    await cota(page, null);
+    await page.getByRole("button", { name: "Salvar", exact: true }).click();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    expect((await backupsAtividades(page)).map(([, v]) => v)).toEqual([caso.copia]);
+  });
+}
+
+test("L2 no Registro: colisão de instante usa o sufixo e o backup vem antes da lista", async ({ page }) => {
+  const longo = `{${"x".repeat(5000)}`;
+  await abrirRegistroCom(page, longo);
+  await page.evaluate((k) => localStorage.setItem(`${k}:backup:${new Date().toISOString()}`, "anterior"), KEY_ATIVIDADES);
+  await cota(page, null);
+  await salvarSemData(page, "Vôlei", "1,5");
+  await expect(lista(page)).toHaveText([/Vôlei\s*1,5 h/]);
+  const base = `${KEY_ATIVIDADES}:backup:${await page.evaluate(() => new Date().toISOString())}`;
+  expect(await backupsAtividades(page)).toEqual([
+    [base, "anterior"],
+    [`${base}-2`, longo],
+  ]);
+  expect(await gravadas(page)).toEqual([`${base}-2`, KEY_ATIVIDADES]);
+});

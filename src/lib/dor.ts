@@ -10,7 +10,7 @@ import {
   RiUser3Line,
 } from "@remixicon/react";
 import { hoje } from "./atividades";
-import { chaveBackup } from "./backup";
+import { guardarBackup, type StorageBackup } from "./backup";
 
 export const KEY = "treino-pwa:dor:v1";
 /** CA03 da RAFA-228: prefixo das chaves com o conteúdo ilegível, uma por recomeço. */
@@ -96,11 +96,13 @@ export function ler(storage: Pick<Storage, "getItem">): { anotacoes: Anotacao[];
 /**
  * CA03 da RAFA-228: só com conteúdo salvo que não pode ser lido. Copia esse
  * conteúdo para uma chave de backup e, depois, grava a lista nova, vazia.
+ * CA05: se o backup falhar, a chave fica intacta e o erro propaga. L1: backup
+ * de mesmo conteúdo não é repetido numa nova tentativa.
  */
-export function recomecar(storage: Pick<Storage, "getItem" | "setItem">, agora: Date = new Date()): Anotacao[] {
+export function recomecar(storage: StorageBackup, agora: Date = new Date()): Anotacao[] {
   const texto = storage.getItem(KEY);
   if (texto === null || bruto(storage) !== null) throw new Error("conteúdo salvo legível");
-  storage.setItem(chaveBackup(storage, BACKUP, agora), texto);
+  guardarBackup(storage, BACKUP, texto, agora);
   storage.setItem(KEY, "[]");
   return [];
 }
