@@ -111,6 +111,7 @@ function RecomecarPlano({ onRecomecado }: { onRecomecado: (plano: Plano) => void
             ref={cancelarRef}
             className="min-h-11"
             variant="secondary"
+            aria-describedby="recomecar-titulo"
             onClick={() => {
               voltarFoco.current = true;
               setConfirmando(false);
