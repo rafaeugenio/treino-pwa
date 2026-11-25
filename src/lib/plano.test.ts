@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { KEY as KEY_ATIVIDADES, carregar as carregarAtividades } from "./atividades";
-import { KEY, TOTAL, TREINOS, agenda, carregar, iniciar, marcarFeito, somarDias, treinoDoDia } from "./plano";
+import { BACKUP, KEY, TOTAL, TREINOS, agenda, carregar, iniciar, ler, marcarFeito, recomecar, somarDias, treinoDoDia } from "./plano";
 
 function memoria(inicial?: Record<string, string>) {
   const data = new Map(Object.entries(inicial ?? {}));
@@ -162,4 +162,43 @@ describe("plano salvo inválido vira não iniciado", () => {
   for (const [titulo, plano] of casos) it(titulo, () => expect(carregar(salvo(plano))).toBeNull());
   it("JSON corrompido", () => expect(carregar(memoria({ [KEY]: "{" }))).toBeNull());
   it("aceita o formato válido", () => expect(carregar(salvo({ inicio: D, feitos: [D] }))).toEqual({ inicio: D, feitos: [D] }));
+});
+
+describe("plano salvo que não pode ser lido (CA03-B3)", () => {
+  const AGORA = new Date("2026-11-24T13:00:00.000Z");
+  it("ler distingue ausente, válido e inválido sem apagar nada", () => {
+    expect(ler(memoria())).toEqual({ plano: null, invalido: false });
+    expect(ler(salvo({ inicio: D, feitos: [] }))).toEqual({ plano: { inicio: D, feitos: [] }, invalido: false });
+    const storage = memoria({ [KEY]: "{" });
+    expect(ler(storage)).toEqual({ plano: null, invalido: true });
+    expect(storage.data.get(KEY)).toBe("{");
+  });
+  it("recomeçar guarda o conteúdo inválido em backup e começa hoje", () => {
+    const storage = memoria({ [KEY]: "{", [KEY_ATIVIDADES]: "[]" });
+    expect(recomecar(storage, D, AGORA)).toEqual({ inicio: D, feitos: [] });
+    expect(storage.data.get(`${BACKUP}2026-11-24T13:00:00.000Z`)).toBe("{");
+    expect(carregar(storage)).toEqual({ inicio: D, feitos: [] });
+    expect(storage.data.get(KEY_ATIVIDADES)).toBe("[]");
+  });
+  it("recomeçar não mexe em plano válido", () => {
+    const storage = salvo({ inicio: D, feitos: [D] });
+    expect(() => recomecar(storage, "2026-12-01", AGORA)).toThrow("plano válido");
+    expect(carregar(storage)).toEqual({ inicio: D, feitos: [D] });
+    expect(storage.data.size).toBe(1);
+  });
+  it("recomeçar sem plano salvo falha sem gravar", () => {
+    const storage = memoria();
+    expect(() => recomecar(storage, D, AGORA)).toThrow("sem plano salvo");
+    expect(storage.data.size).toBe(0);
+  });
+  it("falha no backup não toca no conteúdo inválido", () => {
+    const storage = memoria({ [KEY]: "{" });
+    const original = storage.setItem;
+    storage.setItem = (key, value) => {
+      if (key.startsWith(BACKUP)) throw new Error("quota");
+      original(key, value);
+    };
+    expect(() => recomecar(storage, D, AGORA)).toThrow("quota");
+    expect(storage.data.get(KEY)).toBe("{");
+  });
 });

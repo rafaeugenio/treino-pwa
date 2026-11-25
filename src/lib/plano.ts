@@ -74,6 +74,33 @@ export function carregar(storage: Pick<Storage, "getItem">): Plano | null {
   }
 }
 
+/** Estado salvo: plano válido, nenhum, ou conteúdo que não pode ser lido (CA03-B3). */
+export function ler(storage: Pick<Storage, "getItem">): { plano: Plano | null; invalido: boolean } {
+  const plano = carregar(storage);
+  return { plano, invalido: plano === null && storage.getItem(KEY) !== null };
+}
+
+/** Prefixo das chaves de backup do conteúdo inválido, uma por recomeço. */
+export const BACKUP = `${KEY}:backup:`;
+
+/**
+ * CA03-B3: só com plano salvo que não pode ser lido. Guarda o conteúdo
+ * inválido numa chave de backup e, depois, grava o plano novo a partir de hoje.
+ */
+export function recomecar(
+  storage: Pick<Storage, "getItem" | "setItem">,
+  hoje: string,
+  agora: Date = new Date(),
+): Plano {
+  const bruto = storage.getItem(KEY);
+  if (bruto === null) throw new Error("sem plano salvo");
+  if (carregar(storage) !== null) throw new Error("plano válido");
+  storage.setItem(`${BACKUP}${agora.toISOString()}`, bruto);
+  const plano: Plano = { inicio: hoje, feitos: [] };
+  storage.setItem(KEY, JSON.stringify(plano));
+  return plano;
+}
+
 /**
  * Treinos 1 a 28 com o dia de cada um. O próximo pendente fica no dia seguinte
  * ao último feito (ou em D); se esse dia já passou sem ele feito, desliza para

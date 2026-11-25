@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import {
   RiAlarmLine,
@@ -69,24 +70,75 @@ function useHoje() {
     document.addEventListener("visibilitychange", sync);
     return () => document.removeEventListener("visibilitychange", sync);
   }, []);
-  return dia;
+  return [dia, setDia] as const;
+}
+
+type Salvo = { plano: Plano | null; invalido: boolean };
+function lerSalvo(): Salvo {
+  try {
+    return planoLocal.ler(localStorage);
+  } catch {
+    return { plano: null, invalido: false };
+  }
+}
+
+// CA03-B3: plano salvo que não pode ser lido. Pede confirmação, guarda o
+// conteúdo inválido em backup e começa um plano novo hoje.
+function RecomecarPlano({ onRecomecado }: { onRecomecado: (plano: Plano) => void }) {
+  const [confirmando, setConfirmando] = useState(false);
+  const [error, setError] = useState("");
+  return (
+    <>
+      <div className={CARD}>
+        {confirmando ? (
+          <>
+            <Button
+              className="min-h-11"
+              onClick={() => {
+                try {
+                  onRecomecado(planoLocal.recomecar(localStorage, hoje()));
+                  setError("");
+                } catch {
+                  setError(ERRO_DISPOSITIVO);
+                }
+              }}
+            >
+              Confirmar
+            </Button>
+            <Button className="min-h-11" variant="secondary" onClick={() => setConfirmando(false)}>
+              Cancelar
+            </Button>
+          </>
+        ) : (
+          <Button className="min-h-11" onClick={() => setConfirmando(true)}>
+            Recomeçar plano
+          </Button>
+        )}
+      </div>
+      {error && <p role="alert">{error}</p>}
+    </>
+  );
 }
 
 // CA02 (RAFA-176): treino previsto para hoje e marcar como feito com horas.
 function Inicio({
   atividades,
-  plano,
+  salvo,
   dia,
+  onSincronizar,
   onFeito,
+  onRecomecado,
 }: {
   atividades: Atividade[];
-  plano: Plano | null;
+  salvo: Salvo;
   dia: string;
+  onSincronizar: (dia: string, salvo: Salvo) => void;
   onFeito: (resultado: { plano: Plano; atividades: Atividade[] }) => void;
+  onRecomecado: (plano: Plano) => void;
 }) {
   const [horas, setHoras] = useState("");
   const [error, setError] = useState("");
-  const treino = treinoDoDia(plano, dia);
+  const treino = treinoDoDia(salvo.plano, dia);
   return (
     <>
       <StatCards
@@ -108,6 +160,7 @@ function Inicio({
           },
         ]}
       />
+      {salvo.invalido && <RecomecarPlano onRecomecado={onRecomecado} />}
       {treino && !treino.feito && (
         <form
           className={CARD}
@@ -115,9 +168,16 @@ function Inicio({
             event.preventDefault();
             const valor = parseHoras(horas);
             if (valor === null) return;
+            // CA03-B2: vale o dia do aparelho no toque. A tela passa a mostrar
+            // o plano salvo nesse dia, já com o deslize, antes de gravar.
+            const agora = hoje();
+            const atual = lerSalvo();
+            flushSync(() => onSincronizar(agora, atual));
+            const previsto = treinoDoDia(atual.plano, agora);
+            // Plano encerrado (ou treino do dia já feito): o Feito some, sem alerta.
+            if (!previsto || previsto.feito) return;
             try {
-              // Data recalculada no toque: o app pode ter ficado aberto após a meia-noite.
-              onFeito(planoLocal.marcarFeito(localStorage, hoje(), valor));
+              onFeito(planoLocal.marcarFeito(localStorage, agora, valor));
               setHoras("");
               setError("");
             } catch {
@@ -145,9 +205,20 @@ function Inicio({
 }
 
 // CA02 e CA03 (RAFA-176): iniciar na data D e ver os 28 treinos com o deslize.
-function PlanoTela({ plano, dia, onIniciado }: { plano: Plano | null; dia: string; onIniciado: (plano: Plano) => void }) {
+// CA03-B1: plano válido já iniciado não oferece reiniciar nem trocar a data D.
+function PlanoTela({
+  salvo,
+  dia,
+  onIniciado,
+}: {
+  salvo: Salvo;
+  dia: string;
+  onIniciado: (plano: Plano) => void;
+}) {
   const [inicio, setInicio] = useState(dia);
   const [error, setError] = useState("");
+  const { plano } = salvo;
+  if (salvo.invalido) return <RecomecarPlano onRecomecado={onIniciado} />;
   if (!plano)
     return (
       <>
@@ -303,14 +374,9 @@ export function App() {
       return [];
     }
   });
-  const [plano, setPlano] = useState<Plano | null>(() => {
-    try {
-      return planoLocal.carregar(localStorage);
-    } catch {
-      return null;
-    }
-  });
-  const dia = useHoje();
+  const [salvo, setSalvo] = useState<Salvo>(lerSalvo);
+  const setPlano = (plano: Plano) => setSalvo({ plano, invalido: false });
+  const [dia, setDia] = useHoje();
   useEffect(() => {
     const sync = () => setScreen(screenFromHash(location.hash));
     addEventListener("hashchange", sync);
@@ -325,8 +391,13 @@ export function App() {
     inicio: (
       <Inicio
         atividades={atividades}
-        plano={plano}
+        salvo={salvo}
         dia={dia}
+        onSincronizar={(agora, atual) => {
+          setDia(agora);
+          setSalvo(atual);
+        }}
+        onRecomecado={setPlano}
         onFeito={(resultado) => {
           setPlano(resultado.plano);
           setAtividades(resultado.atividades);
@@ -334,7 +405,7 @@ export function App() {
       />
     ),
     registro: <Registro atividades={atividades} onSaved={setAtividades} />,
-    plano: <PlanoTela plano={plano} dia={dia} onIniciado={setPlano} />,
+    plano: <PlanoTela salvo={salvo} dia={dia} onIniciado={setPlano} />,
     dor: (
       <StatCards
         columns={1}

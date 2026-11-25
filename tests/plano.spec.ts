@@ -171,3 +171,161 @@ test("recusa iniciar sem data, com erro no campo", async ({ page }) => {
   await expect(page.getByTestId("plano")).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem("treino-pwa:plano:v1"))).toBeNull();
 });
+
+// Casos de borda da RAFA-183 (CA03-B1, B2 e B3), card RAFA-183, 24/11/2026 21:50.
+const KEY_PLANO = "treino-pwa:plano:v1";
+const KEY_ATIVIDADES = "treino-pwa:atividades:v1";
+const lerChave = (page: Page, key: string) => page.evaluate((k) => localStorage.getItem(k), key);
+const semAlerta = async (page: Page) => {
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByText("Não foi possível salvar neste dispositivo.")).toHaveCount(0);
+};
+
+test("CA03-B1: plano iniciado não oferece reiniciar nem trocar a data D", async ({ page }) => {
+  await abrirEm(page, D);
+  await iniciar(page, D);
+  for (const etapa of ["logo após iniciar", "após reabrir"]) {
+    if (etapa === "após reabrir") await abrirEm(page, somar(D, 1), "#plano");
+    const painel = page.getByRole("tabpanel");
+    await expect(painel.getByTestId("plano"), etapa).toBeVisible();
+    await expect(painel.getByRole("textbox"), etapa).toHaveCount(0);
+    await expect(painel.getByRole("button"), etapa).toHaveCount(0);
+  }
+});
+
+test("CA03-B2: Feito depois da meia-noite vale o dia novo, já deslizado, sem alerta", async ({ page }) => {
+  await abrirEm(page, "2026-11-23");
+  await iniciar(page, "2026-11-23");
+  await tab(page, "Início");
+  await horas(page).fill("1");
+  await feito(page).click();
+  // App aberto desde antes da meia-noite de 24/11, com o Treino 2 previsto.
+  await page.clock.setFixedTime(new Date("2026-11-24T23:59:30"));
+  await page.reload();
+  await expect(hojeCard(page)).toContainText(/Treino 2\s*de 28/);
+  await horas(page).fill("1,5");
+  await page.clock.setFixedTime(new Date("2026-11-25T00:00:30"));
+  await feito(page).click();
+  await expect(hojeCard(page)).toContainText(/Treino 2\s*Feito/);
+  await semAlerta(page);
+  expect(JSON.parse((await lerChave(page, KEY_PLANO))!)).toEqual({
+    inicio: "2026-11-23",
+    feitos: ["2026-11-23", "2026-11-25"],
+  });
+  expect(JSON.parse((await lerChave(page, KEY_ATIVIDADES))!).map((a: { data: string; nome: string; horas: number }) => [a.data, a.nome, a.horas])).toEqual([
+    ["2026-11-23", "Treino 1", 1],
+    ["2026-11-25", "Treino 2", 1.5],
+  ]);
+  await tab(page, "Plano");
+  await expect(linhas(page).nth(1)).toHaveText(/^Treino 2\s*Feito\s*25\/11$/);
+  await expect(linhas(page).nth(1)).toHaveAttribute("aria-current", "date");
+  await expect(linhas(page).nth(27)).toContainText("21/12");
+});
+
+test("CA03-B2: plano encerrado antes do toque depois da meia-noite, o Feito some sem alerta", async ({ page, context }) => {
+  // 27 treinos feitos de 28/10 a 23/11; o Treino 28 está previsto para 24/11.
+  const inicio = "2026-10-28";
+  await abrirEm(page, D);
+  await page.evaluate(
+    ([k, v]) => localStorage.setItem(k, v),
+    [KEY_PLANO, JSON.stringify({ inicio, feitos: Array.from({ length: 27 }, (_, i) => somar(inicio, i)) })],
+  );
+  await page.clock.setFixedTime(new Date("2026-11-24T23:59:00"));
+  await page.reload();
+  await expect(hojeCard(page)).toContainText(/Treino 28\s*de 28/);
+  await horas(page).fill("1");
+  // Outra aba do aparelho termina o plano antes da meia-noite.
+  const outra = await context.newPage();
+  await outra.goto("./");
+  await outra.getByRole("textbox", { name: "Horas", exact: true }).fill("2");
+  await outra.getByRole("button", { name: "Feito", exact: true }).click();
+  await expect(hojeCard(outra)).toContainText(/Treino 28\s*Feito/);
+  await outra.close();
+  await page.clock.setFixedTime(new Date("2026-11-25T00:00:30"));
+  await feito(page).click();
+  await expect(feito(page)).toHaveCount(0);
+  await expect(hojeCard(page)).toContainText(/—\s*de 28/);
+  await semAlerta(page);
+  expect(JSON.parse((await lerChave(page, KEY_ATIVIDADES))!)).toHaveLength(1);
+});
+
+test("CA03-B2: o toque relê o plano do aparelho e não repete o treino feito em outra aba", async ({ page, context }) => {
+  await abrirEm(page, D);
+  await iniciar(page, D);
+  await tab(page, "Início");
+  await horas(page).fill("2");
+  const outra = await context.newPage();
+  await outra.goto("./");
+  await outra.getByRole("textbox", { name: "Horas", exact: true }).fill("1");
+  await outra.getByRole("button", { name: "Feito", exact: true }).click();
+  await expect(hojeCard(outra)).toContainText(/Treino 1\s*Feito/);
+  await outra.close();
+  await feito(page).click();
+  await expect(hojeCard(page)).toContainText(/Treino 1\s*Feito/);
+  await expect(feito(page)).toHaveCount(0);
+  await semAlerta(page);
+  expect(JSON.parse((await lerChave(page, KEY_ATIVIDADES))!)).toHaveLength(1);
+});
+
+async function abrirCorrompido(page: Page) {
+  await abrirEm(page, D);
+  await page.evaluate((k) => localStorage.setItem(k, "{"), KEY_PLANO);
+  await page.reload();
+}
+const recomecar = (page: Page) => page.getByRole("button", { name: "Recomeçar plano", exact: true });
+
+test("CA03-B3: plano corrompido mostra Recomeçar plano ao abrir o app, sem alerta e sem apagar", async ({ page }) => {
+  await abrirCorrompido(page);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Início");
+  await expect(recomecar(page)).toBeVisible();
+  await semAlerta(page);
+  await semRolagemEAlvos(page);
+  expect(await lerChave(page, KEY_PLANO)).toBe("{");
+});
+
+test("CA03-B3: na tela Plano, Recomeçar plano fica no lugar de Iniciar", async ({ page }) => {
+  await abrirCorrompido(page);
+  await tab(page, "Plano");
+  await expect(recomecar(page)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Iniciar", exact: true })).toHaveCount(0);
+  await semAlerta(page);
+  expect(await lerChave(page, KEY_PLANO)).toBe("{");
+});
+
+test("CA03-B3: Recomeçar plano pede confirmação e Cancelar não grava nada", async ({ page }) => {
+  await abrirCorrompido(page);
+  await recomecar(page).click();
+  await expect(page.getByRole("button", { name: "Confirmar", exact: true })).toBeVisible();
+  for (const alvo of await page.locator("main button").all()) {
+    const box = (await alvo.boundingBox())!;
+    expect(box.height).toBeGreaterThanOrEqual(44);
+  }
+  expect(await lerChave(page, KEY_PLANO)).toBe("{");
+  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(recomecar(page)).toBeVisible();
+  expect(await lerChave(page, KEY_PLANO)).toBe("{");
+  expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.includes(":backup:")))).toEqual([]);
+});
+
+test("CA03-B3: confirmar guarda o conteúdo inválido em backup e o plano novo começa hoje", async ({ page }) => {
+  await abrirCorrompido(page);
+  await page.evaluate((k) => localStorage.setItem(k, "[]"), KEY_ATIVIDADES);
+  await tab(page, "Plano");
+  await recomecar(page).click();
+  await page.getByRole("button", { name: "Confirmar", exact: true }).click();
+  await expect(linhas(page)).toHaveCount(28);
+  await semAlerta(page);
+  await conferirAgenda(page, 1, D);
+  await expect(linhas(page).first()).toHaveAttribute("aria-current", "date");
+  const backups = await page.evaluate(() =>
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith("treino-pwa:plano:v1:backup:"))
+      .map((k) => localStorage.getItem(k)),
+  );
+  expect(backups).toEqual(["{"]);
+  expect(JSON.parse((await lerChave(page, KEY_PLANO))!)).toEqual({ inicio: D, feitos: [] });
+  expect(await lerChave(page, KEY_ATIVIDADES)).toBe("[]");
+  await tab(page, "Início");
+  await expect(hojeCard(page)).toContainText(/Treino 1\s*de 28/);
+  await expect(recomecar(page)).toHaveCount(0);
+});
