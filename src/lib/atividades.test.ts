@@ -134,3 +134,68 @@ describe("entradas inválidas preservadas", () => {
     expect(data.get(KEY)).toBe(bruto);
   });
 });
+
+// CA04 da RAFA-228: chave de atividades que não é lista JSON vai inteira para backup.
+describe("chave de atividades corrompida por inteiro", () => {
+  const AGORA = new Date("2026-11-25T03:00:30.000Z");
+  const CHAVE = `${BACKUP}2026-11-25T03:00:30.000Z`;
+  const nova = { data: "2026-11-25", nome: "Futebol", horas: 2 };
+  const backups = (storage: ReturnType<typeof memoria>) =>
+    Object.fromEntries([...storage.data].filter(([k]) => k.startsWith(BACKUP)));
+
+  it("não é lista: JSON inválido ou outro valor vai bruto para o backup antes de gravar", () => {
+    for (const bruto of ["{", '{"a":1}', "null", "3", '"texto"', "Flexões: 12"]) {
+      const storage = memoria({ [KEY]: bruto });
+      const lista = adicionar(storage, nova, "n", AGORA);
+      expect(storage.gravadas).toEqual([CHAVE, KEY]);
+      expect(storage.data.get(CHAVE)).toBe(bruto);
+      expect(lista).toEqual([{ ...nova, id: "n" }]);
+    }
+  });
+
+  it("backup inexistente: o bruto vai para uma chave nova", () => {
+    const storage = memoria({ [KEY]: "{" });
+    expect(backups(storage)).toEqual({});
+    adicionar(storage, nova, "n", AGORA);
+    expect(backups(storage)).toEqual({ [CHAVE]: "{" });
+  });
+
+  it("backup existente com o mesmo conteúdo permanece, e o bruto novo também fica", () => {
+    const storage = memoria({ [KEY]: "{", [CHAVE]: "{" });
+    adicionar(storage, nova, "n", AGORA);
+    expect(backups(storage)).toEqual({ [CHAVE]: "{", [`${CHAVE}-2`]: "{" });
+  });
+
+  it("backup existente com outro conteúdo não é sobrescrito; o bruto novo vai para uma chave livre", () => {
+    const storage = memoria({ [KEY]: "{", [CHAVE]: "anterior", [`${CHAVE}-2`]: "outro" });
+    adicionar(storage, nova, "n", AGORA);
+    expect(backups(storage)).toEqual({ [CHAVE]: "anterior", [`${CHAVE}-2`]: "outro", [`${CHAVE}-3`]: "{" });
+  });
+
+  it("registro novo salvo e lido por outra instância", () => {
+    const storage = memoria({ [KEY]: '{"a":1}' });
+    adicionar(storage, nova, "n", AGORA);
+    expect(carregar(memoria(Object.fromEntries(storage.data)))).toEqual([{ ...nova, id: "n" }]);
+  });
+
+  it("chave ausente ou vazia não gera backup", () => {
+    for (const inicial of [{}, { [KEY]: "" }] as Record<string, string>[]) {
+      const storage = memoria(inicial);
+      adicionar(storage, nova, "n", AGORA);
+      expect(backups(storage)).toEqual({});
+    }
+  });
+
+  it("se o backup do bruto falhar, a chave fica como estava e o erro propaga", () => {
+    const data = new Map([[KEY, "{"]]);
+    const storage = {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        if (key.startsWith(BACKUP)) throw new Error("quota");
+        data.set(key, value);
+      },
+    };
+    expect(() => adicionar(storage, nova, "n", AGORA)).toThrow("quota");
+    expect(data.get(KEY)).toBe("{");
+  });
+});

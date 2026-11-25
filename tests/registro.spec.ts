@@ -139,3 +139,32 @@ test("CA02: entradas inválidas vão para backup e válidas e o registro novo fi
   await page.reload();
   await expect(lista(page)).toHaveText([/Futebol\s*2 h/, /Vôlei\s*1,5 h/]);
 });
+
+// CA04 (RAFA-228): chave de atividades que não é lista JSON vai bruta para backup,
+// sem alerta e sem Recomeçar, e um backup anterior não é sobrescrito.
+test("CA04: conteúdo que não é lista vai para backup e o registro novo fica salvo e visível", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-24T10:00:00"));
+  await page.goto("./#registro");
+  await page.evaluate((k) => {
+    localStorage.setItem(k, "{");
+    localStorage.setItem(`${k}:backup:anterior`, '{"outro":1}');
+  }, KEY_ATIVIDADES);
+  await page.reload();
+  await expect(page.getByText("Nenhuma atividade")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Recomeçar/ })).toHaveCount(0);
+  await salvarSemData(page, "Vôlei", "1,5");
+  await expect(lista(page)).toHaveText([/Vôlei\s*1,5 h/]);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Recomeçar/ })).toHaveCount(0);
+  const backups = await page.evaluate((k) => {
+    const chaves = Object.keys(localStorage).filter((c) => c.startsWith(`${k}:backup:`)).sort();
+    return chaves.map((c) => [c.endsWith(":anterior"), localStorage.getItem(c)]);
+  }, KEY_ATIVIDADES);
+  expect(backups).toEqual([
+    [false, "{"],
+    [true, '{"outro":1}'],
+  ]);
+  expect((await salvas(page)).map((a) => a.nome)).toEqual(["Vôlei"]);
+  await page.reload();
+  await expect(lista(page)).toHaveText([/Vôlei\s*1,5 h/]);
+});

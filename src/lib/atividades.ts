@@ -57,7 +57,9 @@ export function carregar(storage: Pick<Storage, "getItem">): Atividade[] {
 /**
  * Grava uma atividade nova e devolve a lista completa. CA02 da RAFA-228:
  * entradas salvas que não passam em `valida` vão para uma chave de backup antes
- * da regravação; se o backup falhar, nada é regravado. Falha de quota propaga.
+ * da regravação. CA04: conteúdo salvo que não é lista JSON vai inteiro, bruto,
+ * para uma chave de backup antes da gravação. Se o backup falhar, nada é
+ * regravado. Falha de quota propaga.
  */
 export function adicionar(
   storage: Pick<Storage, "getItem" | "setItem">,
@@ -67,11 +69,22 @@ export function adicionar(
 ): Atividade[] {
   const atividade: Atividade = { ...nova, id, nome: nova.nome.trim() };
   if (!valida(atividade)) throw new Error("atividade inválida");
+  const bruto = storage.getItem(KEY);
+  if (bruto && naoLista(bruto)) storage.setItem(chaveBackup(storage, BACKUP, agora), bruto);
   const invalidas = salvas(storage).filter((item) => !valida(item));
   if (invalidas.length) storage.setItem(chaveBackup(storage, BACKUP, agora), JSON.stringify(invalidas));
   const lista = [...carregar(storage), atividade];
   storage.setItem(KEY, JSON.stringify(lista));
   return lista;
+}
+
+/** CA04: JSON inválido ou valor que não é lista. */
+function naoLista(bruto: string): boolean {
+  try {
+    return !Array.isArray(JSON.parse(bruto));
+  } catch {
+    return true;
+  }
 }
 
 /** Itens da lista salva, válidos ou não; conteúdo que não é lista fica de fora. */
