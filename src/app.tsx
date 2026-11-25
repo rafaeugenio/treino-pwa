@@ -17,6 +17,8 @@ import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { Tab, TabList, TabPanel, Tabs } from "@/components/base/tabs/tabs";
 import { adicionar, carregar, doDia, formatHoras, hoje, parseHoras, type Atividade } from "./lib/atividades";
+import * as planoLocal from "./lib/plano";
+import { TOTAL, agenda, treinoDoDia, type Plano } from "./lib/plano";
 import { SCREENS, screenFromHash, type ScreenId } from "./screens";
 
 const ICONS: Record<ScreenId, RemixiconComponentType> = {
@@ -48,6 +50,170 @@ function useSwCheckOnVisible(registration: ServiceWorkerRegistration | undefined
   }, [registration]);
 }
 
+const CARD = "flex flex-col gap-4 rounded-3xl border border-border-button-default bg-background-primary-default p-6";
+const ERRO_DISPOSITIVO = "Não foi possível salvar neste dispositivo.";
+
+function formatDia(data: string): string {
+  const [a, m, d] = data.split("-").map(Number);
+  return new Date(a, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
+// Dia local do aparelho. Recalcula ao voltar ao primeiro plano: o iOS deixa o
+// app suspenso de um dia para o outro e o deslize do CA03 depende do dia.
+function useHoje() {
+  const [dia, setDia] = useState(() => hoje());
+  useEffect(() => {
+    const sync = () => {
+      if (document.visibilityState === "visible") setDia(hoje());
+    };
+    document.addEventListener("visibilitychange", sync);
+    return () => document.removeEventListener("visibilitychange", sync);
+  }, []);
+  return dia;
+}
+
+// CA02 (RAFA-176): treino previsto para hoje e marcar como feito com horas.
+function Inicio({
+  atividades,
+  plano,
+  dia,
+  onFeito,
+}: {
+  atividades: Atividade[];
+  plano: Plano | null;
+  dia: string;
+  onFeito: (resultado: { plano: Plano; atividades: Atividade[] }) => void;
+}) {
+  const [horas, setHoras] = useState("");
+  const [error, setError] = useState("");
+  const treino = treinoDoDia(plano, dia);
+  return (
+    <>
+      <StatCards
+        columns={1}
+        stats={[
+          {
+            icon: RiCheckLine,
+            label: "Atividades",
+            value: String(atividades.length),
+            delta: "Local",
+            deltaColor: "neutral",
+          },
+          {
+            icon: RiCalendarLine,
+            label: "Hoje",
+            value: treino?.nome ?? "—",
+            delta: treino?.feito ? "Feito" : `de ${TOTAL}`,
+            deltaColor: treino?.feito ? "lime" : "neutral",
+          },
+        ]}
+      />
+      {treino && !treino.feito && (
+        <form
+          className={CARD}
+          onSubmit={(event) => {
+            event.preventDefault();
+            const valor = parseHoras(horas);
+            if (valor === null) return;
+            try {
+              // Data recalculada no toque: o app pode ter ficado aberto após a meia-noite.
+              onFeito(planoLocal.marcarFeito(localStorage, hoje(), valor));
+              setHoras("");
+              setError("");
+            } catch {
+              setError(ERRO_DISPOSITIVO);
+            }
+          }}
+        >
+          <Input
+            label="Horas"
+            inputMode="decimal"
+            value={horas}
+            onChange={setHoras}
+            isRequired
+            validate={(valor) => (valor && parseHoras(valor) === null ? "Horas inválidas" : null)}
+            errorMessage="Horas inválidas"
+          />
+          <Button type="submit" className="min-h-11">
+            Feito
+          </Button>
+        </form>
+      )}
+      {error && <p role="alert">{error}</p>}
+    </>
+  );
+}
+
+// CA02 e CA03 (RAFA-176): iniciar na data D e ver os 28 treinos com o deslize.
+function PlanoTela({ plano, dia, onIniciado }: { plano: Plano | null; dia: string; onIniciado: (plano: Plano) => void }) {
+  const [inicio, setInicio] = useState(dia);
+  const [error, setError] = useState("");
+  if (!plano)
+    return (
+      <>
+        <form
+          className={CARD}
+          onSubmit={(event) => {
+            event.preventDefault();
+            try {
+              onIniciado(planoLocal.iniciar(localStorage, inicio));
+              setError("");
+            } catch {
+              setError(ERRO_DISPOSITIVO);
+            }
+          }}
+        >
+          <Input
+            label="Início"
+            type="date"
+            value={inicio}
+            onChange={setInicio}
+            isRequired
+            errorMessage="Informe a data"
+          />
+          <Button type="submit" className="min-h-11">
+            Iniciar
+          </Button>
+        </form>
+        {error && <p role="alert">{error}</p>}
+      </>
+    );
+  const dias = agenda(plano, dia);
+  return (
+    <>
+      <StatCards
+        columns={1}
+        stats={[
+          {
+            icon: RiCheckLine,
+            label: "Feitos",
+            value: String(plano.feitos.length),
+            delta: `de ${TOTAL}`,
+            deltaColor: "neutral",
+          },
+        ]}
+      />
+      <section className={CARD} aria-label="Treinos do plano">
+        <ol data-testid="plano" className="flex flex-col gap-2">
+          {dias.map((d) => (
+            <li
+              key={d.n}
+              aria-current={d.data === dia ? "date" : undefined}
+              className="flex min-h-11 items-center justify-between gap-3"
+            >
+              <span className="text-body-medium">{d.nome}</span>
+              <span className="flex items-center gap-2">
+                {d.feito && <Chip color="lime">Feito</Chip>}
+                <Chip color={d.data === dia ? "blue" : "gray"}>{formatDia(d.data)}</Chip>
+              </span>
+            </li>
+          ))}
+        </ol>
+      </section>
+    </>
+  );
+}
+
 // CA01 (RAFA-176): atividade do dia com data, nome e horas, salva no aparelho.
 function Registro({ atividades, onSaved }: { atividades: Atividade[]; onSaved: (lista: Atividade[]) => void }) {
   const [data, setData] = useState(() => hoje());
@@ -58,7 +224,7 @@ function Registro({ atividades, onSaved }: { atividades: Atividade[]; onSaved: (
   return (
     <>
       <form
-        className="flex flex-col gap-4 rounded-3xl border border-border-button-default bg-background-primary-default p-6"
+        className={CARD}
         onSubmit={(event) => {
           event.preventDefault();
           const valor = parseHoras(horas);
@@ -69,7 +235,7 @@ function Registro({ atividades, onSaved }: { atividades: Atividade[]; onSaved: (
             setHoras("");
             setError("");
           } catch {
-            setError("Não foi possível salvar neste dispositivo.");
+            setError(ERRO_DISPOSITIVO);
           }
         }}
       >
@@ -137,6 +303,14 @@ export function App() {
       return [];
     }
   });
+  const [plano, setPlano] = useState<Plano | null>(() => {
+    try {
+      return planoLocal.carregar(localStorage);
+    } catch {
+      return null;
+    }
+  });
+  const dia = useHoje();
   useEffect(() => {
     const sync = () => setScreen(screenFromHash(location.hash));
     addEventListener("hashchange", sync);
@@ -146,29 +320,21 @@ export function App() {
     setScreen(id);
     history.replaceState(null, "", id === "inicio" ? location.pathname : `#${id}`);
   };
-  // Telas sem feature: placeholders com StatCards reais; dados chegam nas RAFA-183 a 186.
+  // Telas sem feature: placeholders com StatCards reais; dados chegam nas RAFA-184 a 186.
   const content: Record<ScreenId, ReactNode> = {
     inicio: (
-      <StatCards
-        columns={1}
-        stats={[
-          {
-            icon: RiCheckLine,
-            label: "Atividades",
-            value: String(atividades.length),
-            delta: "Local",
-            deltaColor: "neutral",
-          },
-        ]}
+      <Inicio
+        atividades={atividades}
+        plano={plano}
+        dia={dia}
+        onFeito={(resultado) => {
+          setPlano(resultado.plano);
+          setAtividades(resultado.atividades);
+        }}
       />
     ),
     registro: <Registro atividades={atividades} onSaved={setAtividades} />,
-    plano: (
-      <StatCards
-        columns={1}
-        stats={[{ icon: RiCalendarLine, label: "Dia", value: "0", delta: "de 28", deltaColor: "neutral" }]}
-      />
-    ),
+    plano: <PlanoTela plano={plano} dia={dia} onIniciado={setPlano} />,
     dor: (
       <StatCards
         columns={1}

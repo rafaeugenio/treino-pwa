@@ -1,4 +1,4 @@
-# Treino PWA: SDD das RAFA-180, RAFA-181 e RAFA-182
+# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182 e RAFA-183
 
 ## Spec
 
@@ -117,7 +117,7 @@ Issue: [RAFA-181](https://linear.app/rafagg/issue/RAFA-181/02-montar-o-casco-mob
 - A tela aberta fica no hash (`#registro` etc.), então recarregar mantém a tela. Início usa `/` sem hash.
 - Safe areas: `main` usa `env(safe-area-inset-*)` nos quatro lados e reserva a altura da barra; a barra soma `env(safe-area-inset-bottom)` e as laterais.
 - Alvos de toque: abas, botões e campos com no mínimo 44×44 px.
-- A prova local do CA07 (formulário Registro, `data-testid="record"`) foi para a tela Registro. O botão Atualizar fica acima das telas, visível em qualquer uma. Com o casco, `src/main.tsx` só monta o app e o `useRegisterSW` (Atualizar e checagem do SW ao voltar ao primeiro plano da RAFA-225) vive em `src/app.tsx`.
+- A prova local do CA07 (formulário Registro) foi para a tela Registro; desde a RAFA-182 a lista da tela é `data-testid="atividades"` (o antigo `data-testid="record"` saiu). O botão Atualizar fica acima das telas, visível em qualquer uma. Com o casco, `src/main.tsx` só monta o app e o `useRegisterSW` (Atualizar e checagem do SW ao voltar ao primeiro plano da RAFA-225) vive em `src/app.tsx`.
 
 ### Peças Board UI
 
@@ -172,3 +172,35 @@ Plano de 28 dias e deslize (CA02 e CA03, RAFA-183), dor (CA04), estatísticas re
 ### Gates
 
 `npm run check` com HOME falso (`rafa182-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Resultados e exit codes na seção Verification do PR.
+
+## RAFA-183: plano de 28 dias e deslize
+
+Issue: [RAFA-183](https://linear.app/rafagg/issue/RAFA-183/04-implementar-o-plano-de-28-dias-e-o-deslize). Contrato: [CA02 e CA03 da RAFA-176](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia), sem reescrita, com a D1 confirmada pelo Rafael em 23/11/2026 18:31 (dia previsto sem nenhum registro também desliza). O card da RAFA-183 ainda chama a D1 de provisória; vale a D1 confirmada no card mãe.
+
+### Design
+
+- Modelo em `src/lib/plano.ts`, chave nova `treino-pwa:plano:v1` com `{ inicio, feitos }`: o dia D de início e, em ordem, o dia em que cada treino foi marcado como feito. A chave `treino-pwa:atividades:v1` não é migrada nem reaproveitada para o estado do plano.
+- Conteúdo dos 28 treinos: lista fixa no código com os nomes `Treino 1` a `Treino 28`. Não há programa clínico no repositório, no SDD nem nos cards, e o app não inventa rotina de exercícios. Conteúdo oficial, quando existir, substitui a lista `TREINOS`.
+- Agenda derivada, sem job: o próximo treino pendente fica no dia seguinte ao último feito (ou em D). Se esse dia já passou no calendário local do aparelho sem o treino marcado, ele desliza para hoje e os seguintes andam junto, um por dia. Assim nenhum treino é pulado ou repetido e a data final anda um dia por dia deslizado. Atividade substituta (ex.: Futebol 2 h, pela tela Registro) não conta como treino e fica no histórico da RAFA-182 com as horas.
+- "O dia termina" é avaliado ao abrir o app e ao voltar ao primeiro plano (`visibilitychange`), pelo dia local; não há backend.
+- Marcar feito grava o plano e registra a atividade `Treino N` no dia, com as horas, em `treino-pwa:atividades:v1` (o modelo da RAFA-182 já previa o treino do plano como nome). Se gravar a atividade falhar, o plano volta ao estado anterior e aparece o alerta de dispositivo.
+- Plano salvo corrompido ou fora do formato é lido como não iniciado, no mesmo padrão da RAFA-182 (nada é apagado na leitura).
+- Tela Plano: sem plano, Input Board UI `Início` (`type="date"`, abre em hoje) e Button `Iniciar`; com plano, StatCards `Feitos N de 28` e a lista dos 28 (`data-testid="plano"`) com nome, Chip `Feito` e Chip da data; a linha de hoje tem `aria-current="date"`.
+- Tela Início: StatCards `Atividades` e `Hoje` (treino previsto ou `—`, com `de 28` ou `Feito`) e, quando há treino pendente hoje, Input `Horas` e Button `Feito`.
+- Validação no campo, com `aria-invalid` e mensagem ligada por `aria-describedby`: `Horas inválidas` (mesma regra do CA01, inclusive `0,001`) e `Informe a data`. O alerta de dispositivo fica só para falha de gravação.
+
+### Fora desta entrega
+
+Editor do plano pela UI, validação clínica, reiniciar ou trocar a data D de um plano já iniciado (o CA02 não descreve), CA04 (dor), CA05 (estatísticas reais), CA06 (lembretes), login, nuvem, integrações, export/import, backend, Dialkit e deploy.
+
+### Tarefas
+
+- [x] `src/lib/plano.ts` e `src/lib/plano.test.ts`: sequência 1 a 28 em dias consecutivos, marcar feito com horas, deslize por substituta e por dia sem registro, data final, plano futuro, plano concluído, guardas e formato salvo inválido.
+- [x] Telas Início e Plano em `src/app.tsx`.
+- [x] `tests/plano.spec.ts` (WebKit iPhone 15 e Chromium, 390×844, relógio do Playwright): CA02 completo, CA03 com Futebol 2 h no dia previsto, CA03 com dois dias sem registro, troca de dia ao voltar ao primeiro plano, início futuro e erros no campo (`0,001` e data vazia).
+- [x] Seção RAFA-181 corrigida: a menção a `data-testid="record"` passou a `data-testid="atividades"`.
+- [ ] Revisão Bari no head exato e merge pelo responsável.
+
+### Gates
+
+`npm run check` com HOME falso (`rafa183-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.
