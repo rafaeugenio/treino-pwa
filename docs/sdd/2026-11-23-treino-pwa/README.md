@@ -1,4 +1,4 @@
-# Treino PWA: SDD das RAFA-180, RAFA-181 e RAFA-182
+# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182 e RAFA-183
 
 ## Spec
 
@@ -117,7 +117,7 @@ Issue: [RAFA-181](https://linear.app/rafagg/issue/RAFA-181/02-montar-o-casco-mob
 - A tela aberta fica no hash (`#registro` etc.), então recarregar mantém a tela. Início usa `/` sem hash.
 - Safe areas: `main` usa `env(safe-area-inset-*)` nos quatro lados e reserva a altura da barra; a barra soma `env(safe-area-inset-bottom)` e as laterais.
 - Alvos de toque: abas, botões e campos com no mínimo 44×44 px.
-- A prova local do CA07 (formulário Registro, `data-testid="record"`) foi para a tela Registro. O botão Atualizar fica acima das telas, visível em qualquer uma. Com o casco, `src/main.tsx` só monta o app e o `useRegisterSW` (Atualizar e checagem do SW ao voltar ao primeiro plano da RAFA-225) vive em `src/app.tsx`.
+- A prova local do CA07 (formulário Registro) foi para a tela Registro; desde a RAFA-182 a lista da tela é `data-testid="atividades"` (o antigo `data-testid="record"` saiu). O botão Atualizar fica acima das telas, visível em qualquer uma. Com o casco, `src/main.tsx` só monta o app e o `useRegisterSW` (Atualizar e checagem do SW ao voltar ao primeiro plano da RAFA-225) vive em `src/app.tsx`.
 
 ### Peças Board UI
 
@@ -172,3 +172,45 @@ Plano de 28 dias e deslize (CA02 e CA03, RAFA-183), dor (CA04), estatísticas re
 ### Gates
 
 `npm run check` com HOME falso (`rafa182-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Resultados e exit codes na seção Verification do PR.
+
+## RAFA-183: plano de 28 dias e deslize
+
+Issue: [RAFA-183](https://linear.app/rafagg/issue/RAFA-183/04-implementar-o-plano-de-28-dias-e-o-deslize). Contrato: [CA02 e CA03 da RAFA-176](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia), sem reescrita, com a D1 confirmada pelo Rafael em 23/11/2026 18:31 (dia previsto sem nenhum registro também desliza).
+
+### Design
+
+- Modelo em `src/lib/plano.ts`, chave nova `treino-pwa:plano:v1` com `{ inicio, feitos }`: o dia D de início e, em ordem, o dia em que cada treino foi marcado como feito. A chave `treino-pwa:atividades:v1` não é migrada nem reaproveitada para o estado do plano.
+- Conteúdo dos 28 treinos: lista fixa no código com os nomes `Treino 1` a `Treino 28`. Não há programa clínico no repositório, no SDD nem nos cards, e o app não inventa rotina de exercícios. Conteúdo oficial, quando existir, substitui a lista `TREINOS`.
+- Agenda derivada, sem job: o próximo treino pendente fica no dia seguinte ao último feito (ou em D). Se esse dia já passou no calendário local do aparelho sem o treino marcado, ele desliza para hoje e os seguintes andam junto, um por dia. Assim nenhum treino é pulado ou repetido e a data final anda um dia por dia deslizado. Atividade substituta (ex.: Futebol 2 h, pela tela Registro) não conta como treino e fica no histórico da RAFA-182 com as horas.
+- "O dia termina" é avaliado ao abrir o app e ao voltar ao primeiro plano (`visibilitychange`), pelo dia local; não há backend.
+- Marcar feito grava o plano e registra a atividade `Treino N` no dia, com as horas, em `treino-pwa:atividades:v1` (o modelo da RAFA-182 já previa o treino do plano como nome). Se gravar a atividade falhar, o plano volta ao estado anterior e aparece o alerta de dispositivo.
+- Plano salvo corrompido ou fora do formato é lido como não iniciado, no mesmo padrão da RAFA-182 (nada é apagado na leitura); `ler()` marca esse estado como inválido e a UI segue o CA03-B3 abaixo.
+- Tela Plano: sem plano, Input Board UI `Início` (`type="date"`, abre em hoje) e Button `Iniciar`; com plano, StatCards `Feitos N de 28` e a lista dos 28 (`data-testid="plano"`) com nome, Chip `Feito` e Chip da data; a linha de hoje tem `aria-current="date"`.
+- Tela Início: StatCards `Atividades` e `Hoje` (treino previsto ou `—`, com `de 28` ou `Feito`) e, quando há treino pendente hoje, Input `Horas` e Button `Feito`.
+- Validação no campo, com `aria-invalid` e mensagem ligada por `aria-describedby`: `Horas inválidas` (mesma regra do CA01, inclusive `0,001`) e `Informe a data`. O alerta de dispositivo fica só para falha de gravação.
+
+### Casos de borda (CA03-B1, B2 e B3)
+
+Contrato: [seção "Casos de borda" do card da RAFA-183](https://linear.app/rafagg/issue/RAFA-183/04-implementar-o-plano-de-28-dias-e-o-deslize) (Mane · Spec, 24/11/2026 21:50), sem reescrita. O B3 também resolve o P2 da revisão Codex do head `7275159` (plano inválido bloqueava o início pela UI).
+
+- CA03-B1: com plano válido, a tela Plano mostra só o progresso e a lista; não há campo de data nem botão de reiniciar. Comportamento já existente, agora coberto por teste.
+- CA03-B2: no toque em Feito, `src/app.tsx` lê o dia do aparelho naquele instante e relê o plano salvo, atualiza a tela (`flushSync`) com o treino previsto para esse dia, já deslizado, e só então grava o treino desse dia na data nova. Sem treino pendente no dia (plano encerrado, ou treino já marcado em outra aba), o Feito some e nada é gravado, sem alerta.
+- CA03-B3: `ler()` distingue plano ausente, válido e inválido. Com conteúdo inválido, Início e Plano mostram o Button `Recomeçar plano` (no Plano, no lugar de `Iniciar`), que abre `Confirmar` e `Cancelar`. No estado de confirmação, o título `Recomeçar plano?` (h2) ocupa o lugar do botão, o foco vai para `Cancelar` e `Confirmar` fica por último; assim o segundo gesto de um toque duplo, dblclick ou Enter repetido nunca cai no `Confirmar` (ajuste da [review Bari 6050114781](https://github.com/rafaeugenio/treino-pwa/pull/7#pullrequestreview-6050114781)). Cancelar devolve o foco ao `Recomeçar plano`. Confirmar chama `recomecar()`: guarda o conteúdo inválido em `treino-pwa:plano:v1:backup:<instante ISO>` (uma chave por recomeço; se a chave já existir, usa o sufixo `-2`, `-3` e assim por diante, sem sobrescrever) e só depois grava o plano novo começando hoje. Se o backup falhar, nada muda e aparece o alerta de dispositivo, que fica só para falha real de gravação. `iniciar()` continua recusando qualquer chave existente.
+
+### Fora desta entrega
+
+Editor do plano pela UI, validação clínica, reiniciar ou trocar a data D de um plano já iniciado (a única exceção é o plano salvo corrompido, CA03-B3), CA04 (dor), CA05 (estatísticas reais), CA06 (lembretes), login, nuvem, integrações, export/import, backend, Dialkit e deploy.
+
+### Tarefas
+
+- [x] `src/lib/plano.ts` e `src/lib/plano.test.ts`: sequência 1 a 28 em dias consecutivos, marcar feito com horas, deslize por substituta e por dia sem registro, data final, plano futuro, plano concluído, guardas e formato salvo inválido.
+- [x] Telas Início e Plano em `src/app.tsx`.
+- [x] `tests/plano.spec.ts` (WebKit iPhone 15 e Chromium, 390×844, relógio do Playwright): CA02 completo, CA03 com Futebol 2 h no dia previsto, CA03 com dois dias sem registro, troca de dia ao voltar ao primeiro plano, início futuro e erros no campo (`0,001` e data vazia).
+- [x] CA03-B1, B2 e B3: `ler` e `recomecar` com testes unitários; testes Playwright do plano iniciado sem opções de reinício, do Feito cruzando a meia-noite com relógio falso, do plano encerrado antes do toque, da releitura do plano marcado em outra aba e do Recomeçar plano (abertura, confirmação e backup).
+- [x] Ajustes da [review Bari 6050114781](https://github.com/rafaeugenio/treino-pwa/pull/7#pullrequestreview-6050114781): dblclick, dois toques rápidos e Enter duplo no `Recomeçar plano` não confirmam nem gravam; Cancelar devolve o foco ao `Recomeçar plano`; título `Recomeçar plano?` na confirmação; backup com sufixo quando a chave já existe; `marcarFeito` propaga o erro original se desfazer o plano também falhar. Cada item com teste próprio (Playwright nos dois motores ou Vitest).
+- [x] Seção RAFA-181 corrigida: a menção a `data-testid="record"` passou a `data-testid="atividades"`.
+- [ ] Revisão Bari no head exato e merge pelo responsável.
+
+### Gates
+
+`npm run check` com HOME falso (`rafa183-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.
