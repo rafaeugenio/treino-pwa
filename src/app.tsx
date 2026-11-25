@@ -20,6 +20,7 @@ import { adicionar, carregar, doDia, formatHoras, hoje, parseHoras, type Ativida
 import * as dorLocal from "./lib/dor";
 import { horas as somarHoras, progresso } from "./lib/estatisticas";
 import { ICONES, historico, vazia, type Anotacao } from "./lib/dor";
+import { AVISO_IOS, lembrete } from "./lib/lembrete";
 import * as planoLocal from "./lib/plano";
 import { TOTAL, agenda, treinoDoDia, type Plano } from "./lib/plano";
 import { SCREENS, screenFromHash, type ScreenId } from "./screens";
@@ -171,8 +172,20 @@ function Inicio({
   const [horas, setHoras] = useState("");
   const [error, setError] = useState("");
   const treino = treinoDoDia(salvo.plano, dia);
+  // CA06-1 e CA06-2 (RAFA-186): local, do mesmo estado do Feito; some ao marcar.
+  const falta = lembrete(salvo.plano, dia);
   return (
     <>
+      {falta && (
+        <section
+          aria-label="Lembrete"
+          data-testid="lembrete"
+          className="flex items-center gap-3 rounded-3xl border border-border-button-default bg-background-primary-default p-6"
+        >
+          <RiAlarmLine className="size-6 shrink-0 text-foreground-icon-primary" aria-hidden />
+          <span className="text-headline-medium">Falta o {falta}</span>
+        </section>
+      )}
       <StatCards
         columns={1}
         stats={[
@@ -569,7 +582,6 @@ export function App() {
     setScreen(id);
     history.replaceState(null, "", id === "inicio" ? location.pathname : `#${id}`);
   };
-  // Lembretes segue placeholder com StatCards reais; dados chegam na RAFA-186.
   const content: Record<ScreenId, ReactNode> = {
     inicio: (
       <Inicio
@@ -591,11 +603,13 @@ export function App() {
     plano: <PlanoTela salvo={salvo} dia={dia} onIniciado={setPlano} />,
     dor: <Dor dores={dores} onSaved={setDores} />,
     estatisticas: <Estatisticas atividades={atividades} plano={salvo.plano} />,
+    // CA06-3 (RAFA-186): só a linha da limitação do iOS, sem botão nem opção (D2).
     lembretes: (
-      <StatCards
-        columns={1}
-        stats={[{ icon: RiAlarmLine, label: "Ativos", value: "0", delta: "Local", deltaColor: "neutral" }]}
-      />
+      <section aria-label="Aviso" className="rounded-2xl bg-background-secondary-default p-4">
+        <p data-testid="aviso-ios" className="text-body-regular">
+          {AVISO_IOS}
+        </p>
+      </section>
     ),
   };
   return (

@@ -1,4 +1,4 @@
-# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182, RAFA-183, RAFA-184 e RAFA-185
+# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182, RAFA-183, RAFA-184, RAFA-185 e RAFA-186
 
 ## Spec
 
@@ -264,7 +264,7 @@ Issue: [RAFA-185](https://linear.app/rafagg/issue/RAFA-185/06-exibir-estatistica
 
 ### Fora desta entrega
 
-Exportar relatório, Apple Saúde, Strava e wearables, gráficos, filtros por período, sequências (streaks), estatísticas de dor, metas de horas, exclusão de dados pelo app e o CA06 (Lembretes, RAFA-186), que segue placeholder.
+Exportar relatório, Apple Saúde, Strava e wearables, gráficos, filtros por período, sequências (streaks), estatísticas de dor, metas de horas, exclusão de dados pelo app e o CA06 (Lembretes), entregue depois na RAFA-186.
 
 ### Tarefas
 
@@ -276,3 +276,32 @@ Exportar relatório, Apple Saúde, Strava e wearables, gráficos, filtros por pe
 ### Gates
 
 `npm run check` com HOME falso (`rafa185-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.
+
+## RAFA-186: lembrete local na home
+
+Issue: [RAFA-186](https://linear.app/rafagg/issue/RAFA-186/07-lembrete-local-na-home). Contrato: [CA06-1 a CA06-4 do card da RAFA-186](https://linear.app/rafagg/issue/RAFA-186/07-lembrete-local-na-home), sem reescrita. Cobre o [CA06 da RAFA-176](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia).
+
+D2 confirmada pelo Rafael em 23/11/2026 às 18:31, via Gomu: nesta versão vale só o lembrete local ao abrir o app, sem pedido de permissão de notificação e sem servidor de push. Web Push fica na [RAFA-179](https://linear.app/rafagg/issue/RAFA-179/pwa-de-treino-lembrete-por-push-com-servidor-follow-up-da-rafa-176), fora desta entrega.
+
+### Design
+
+- Cálculo puro em `src/lib/lembrete.ts`, sem chave nova nem gravação: `lembrete(plano, hoje)` devolve o nome do treino de `treinoDoDia` (já com o deslize do CA03) enquanto ele não está feito; sem plano, plano ilegível, plano futuro, plano terminado ou treino de hoje feito, devolve `null`.
+- Início: com lembrete, um card Board UI no topo (`data-testid="lembrete"`, ícone de alarme e `Falta o Treino N`), sem botão. Usa o mesmo estado do Feito em `src/app.tsx`, então some ao marcar Feito sem reabrir o app (CA06-2).
+- Dia: a guarda de tempo é o dia local de hoje. `useHoje` já recalcula o dia ao voltar ao primeiro plano; o lembrete acompanha a virada do dia sem reabrir. Não há lembrete por hora do relógio.
+- Lembretes (CA06-3): o placeholder de StatCards saiu. A tela tem só o título e uma linha num bloco do recipe dos tiles do StatCards (`rounded-2xl bg-background-secondary-default p-4`): `Sem notificação push no iPhone nesta versão.` Cabe numa linha em 390 px. Sem botão, chave ou opção.
+- CA06-4: nenhum fonte chama `Notification`, `PushManager`, `showNotification` ou `subscribe`; o SW continua o generateSW do Workbox, sem `importScripts` nem código próprio. O lembrete não usa a rede e aparece offline. `useSwCheckOnVisible` e o botão Atualizar seguem como estavam; essa checagem é do SW e não faz parte do lembrete.
+
+### Fora desta entrega
+
+Notificação push e servidor de push (RAFA-179); lembrete com horário, som, vibração ou badge no ícone; ligar e desligar o lembrete ou configurar o texto; lembrete de registro de dor ou de atividade livre.
+
+### Tarefas
+
+- [x] `src/lib/lembrete.ts` e `src/lib/lembrete.test.ts`: CA06-1 (treino de hoje, deslize, Treino 28), CA06-2 (feito hoje, sem plano, plano terminado, início futuro), CA06-3 (texto da linha) e CA06-4 (varredura dos fontes e da configuração do SW).
+- [x] Início e Lembretes em `src/app.tsx`, com o estado já existente.
+- [x] `tests/lembrete.spec.ts` (WebKit iPhone 15 e Chromium, 390×844): CA06-1 a CA06-4, virada do dia ao voltar ao primeiro plano, permissão e push instrumentados (com substitutos no WebKit do Playwright, que não expõe essas APIs), SW gerado sem push, rede e abertura offline.
+- [ ] Revisão no head exato e merge pelo responsável.
+
+### Gates
+
+`npm run check` com HOME falso (`rafa186-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.
