@@ -1,4 +1,4 @@
-# Treino PWA: SDD da RAFA-180 e RAFA-181
+# Treino PWA: SDD das RAFA-180, RAFA-181 e RAFA-182
 
 ## Spec
 
@@ -143,3 +143,32 @@ CA01 a CA06 (registro completo, plano de 28 dias com deslize, dor, estatísticas
 ### Gates
 
 `npm run check` com HOME falso (`rafa181-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Resultados e exit codes na seção Verification do PR. Anti-slop: PASSOU, com screenshots das seis telas em WebKit revisados localmente (não versionados). Safe area real com notch e home indicator exige conferência no iPhone; o Playwright não simula inset.
+
+## RAFA-182: registro diário de atividades com horas
+
+Issue: [RAFA-182](https://linear.app/rafagg/issue/RAFA-182/03-registrar-atividades-diarias-com-horas). Contrato: [CA01 da RAFA-176](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia), sem reescrita, mais os requisitos 1 e 4 do card mãe (dia, o que praticou e horas, inclusive nas atividades substitutas).
+
+### Design
+
+- Modelo em `src/lib/atividades.ts`: cada atividade tem `id`, `data` (dia local AAAA-MM-DD), `nome` livre (Vôlei, Futebol, treino do plano) e `horas` em (0, 24]. Lista JSON em `localStorage`, chave nova `treino-pwa:atividades:v1`.
+- A chave `treino-pwa:registro:v1` da prova da RAFA-180 guardava um texto livre demonstrativo. Ela não é lida nem migrada, para não misturar formatos; o módulo `src/lib/storage.ts` saiu. Conteúdo corrompido ou fora do formato vira lista vazia, e falha de gravação mostra erro visível.
+- Horas aceitam vírgula brasileira (`1,5`), ponto e inteiro; a lista mostra `1,5 h`.
+- Tela Registro: Input Board UI de Data (`type="date"`, abre no dia de hoje), Atividade e Horas (`inputMode="decimal"`), Button Salvar e, abaixo, a lista das atividades do dia escolhido no campo Data, com nome e Chip Board UI das horas. Sem subtítulo nem texto de ajuda; a única mensagem é `Horas inválidas` no campo, quando necessário.
+- Início conta as atividades salvas no StatCards. Estatísticas segue placeholder (CA05 é da RAFA-185).
+
+### Fora desta entrega
+
+Plano de 28 dias e deslize (CA02 e CA03, RAFA-183), dor (CA04), estatísticas reais (CA05) e lembretes (CA06). Editar ou apagar atividade não está no CA01 e não foi feito. Sem login, nuvem, integrações, export/import, backend, Dialkit ou deploy.
+
+### Tarefas
+
+- [x] Modelo local versionado com testes unitários (`src/lib/atividades.test.ts`): horas com vírgula, limites, dia local, persistência entre instâncias, formato antigo e corrompido ignorados, quota.
+- [x] Tela Registro com data, nome, horas e lista do dia.
+- [x] `tests/registro.spec.ts` (CA01): registra Vôlei 1,5 e Flexões no dia 24 e Futebol no dia 23, confere a lista de cada dia, fecha a página e reabre outra no mesmo contexto, e confere de novo; segundo teste confere o dia de hoje como padrão, a recusa de horas inválidas sem gravar e alvos de 44 px.
+- [x] `tests/pwa.spec.ts` (CA07): a prova de persistência e reabertura offline passou a registrar Vôlei 1,5 em 24/11/2026 e a conferir essa atividade após recarregar, offline e depois de 20 s sem páginas.
+- [x] Ajustes da revisão Bari r1 ([review 6049069913](https://github.com/rafaeugenio/treino-pwa/pull/6#pullrequestreview-6049069913)): horas que arredondam para 0 (ex.: `0,001`) passam a ser recusadas por `parseHoras` com `Horas inválidas` no campo; nome só com espaços mostra `Informe a atividade` no campo Atividade. Nos dois casos nada é gravado e o alerta de dispositivo não aparece (testes unitário e Playwright).
+- [ ] Revisão Bari no head exato e merge pelo responsável.
+
+### Gates
+
+`npm run check` com HOME falso (`rafa182-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Resultados e exit codes na seção Verification do PR.

@@ -12,10 +12,11 @@ import {
   type RemixiconComponentType,
 } from "@remixicon/react";
 import { StatCards } from "@/components/application/dashboard/stat-cards";
+import { Chip } from "@/components/base/badges/chip";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { Tab, TabList, TabPanel, Tabs } from "@/components/base/tabs/tabs";
-import { load, save } from "./lib/storage";
+import { adicionar, carregar, doDia, formatHoras, hoje, parseHoras, type Atividade } from "./lib/atividades";
 import { SCREENS, screenFromHash, type ScreenId } from "./screens";
 
 const ICONS: Record<ScreenId, RemixiconComponentType> = {
@@ -47,39 +48,70 @@ function useSwCheckOnVisible(registration: ServiceWorkerRegistration | undefined
   }, [registration]);
 }
 
-// Prova local do CA07 (RAFA-180). O registro completo é da RAFA-182.
-function Registro({ record, onSaved }: { record: string; onSaved: (value: string) => void }) {
-  const [value, setValue] = useState("");
+// CA01 (RAFA-176): atividade do dia com data, nome e horas, salva no aparelho.
+function Registro({ atividades, onSaved }: { atividades: Atividade[]; onSaved: (lista: Atividade[]) => void }) {
+  const [data, setData] = useState(() => hoje());
+  const [nome, setNome] = useState("");
+  const [horas, setHoras] = useState("");
   const [error, setError] = useState("");
+  const lista = doDia(atividades, data);
   return (
     <>
       <form
         className="flex flex-col gap-4 rounded-3xl border border-border-button-default bg-background-primary-default p-6"
         onSubmit={(event) => {
           event.preventDefault();
+          const valor = parseHoras(horas);
+          if (valor === null || !nome.trim() || !data) return;
           try {
-            save(localStorage, value);
-            onSaved(value.trim());
-            setValue("");
+            onSaved(adicionar(localStorage, { data, nome, horas: valor }));
+            setNome("");
+            setHoras("");
             setError("");
           } catch {
             setError("Não foi possível salvar neste dispositivo.");
           }
         }}
       >
-        <Input label="Registro" value={value} onChange={setValue} isRequired maxLength={160} />
+        <Input label="Data" type="date" value={data} onChange={setData} isRequired />
+        <Input
+          label="Atividade"
+          value={nome}
+          onChange={setNome}
+          isRequired
+          maxLength={60}
+          validate={(valor) => (valor && !valor.trim() ? "Informe a atividade" : null)}
+          errorMessage="Informe a atividade"
+        />
+        <Input
+          label="Horas"
+          inputMode="decimal"
+          value={horas}
+          onChange={setHoras}
+          isRequired
+          validate={(valor) => (valor && parseHoras(valor) === null ? "Horas inválidas" : null)}
+          errorMessage="Horas inválidas"
+        />
         <Button type="submit" className="min-h-11">
-          Salvar treino
+          Salvar
         </Button>
       </form>
       <section
         className="rounded-3xl border border-border-button-default bg-background-primary-default p-6"
-        aria-label="Último registro"
+        aria-label="Atividades do dia"
       >
-        <h2 className="text-headline-medium">Último registro</h2>
-        <p data-testid="record" className="text-body-regular break-words" role="status">
-          {record || "Nenhum registro"}
-        </p>
+        {lista.length ? (
+          <ul data-testid="atividades" className="flex flex-col gap-2">
+            {lista.map((atividade) => (
+              <li key={atividade.id} className="flex min-h-11 items-center justify-between gap-3">
+                <span className="text-body-medium break-words">{atividade.nome}</span>
+                <Chip color="gray">{formatHoras(atividade.horas)}</Chip>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-body-regular text-text-secondary">Nenhuma atividade</p>
+        )}
       </section>
       {error && <p role="alert">{error}</p>}
     </>
@@ -98,11 +130,11 @@ export function App() {
   });
   useSwCheckOnVisible(swRegistration);
   const [screen, setScreen] = useState<ScreenId>(() => screenFromHash(location.hash));
-  const [record, setRecord] = useState(() => {
+  const [atividades, setAtividades] = useState<Atividade[]>(() => {
     try {
-      return load(localStorage);
+      return carregar(localStorage);
     } catch {
-      return "";
+      return [];
     }
   });
   useEffect(() => {
@@ -114,7 +146,7 @@ export function App() {
     setScreen(id);
     history.replaceState(null, "", id === "inicio" ? location.pathname : `#${id}`);
   };
-  // Telas sem feature: placeholders com StatCards reais; dados chegam nas RAFA-182 a 186.
+  // Telas sem feature: placeholders com StatCards reais; dados chegam nas RAFA-183 a 186.
   const content: Record<ScreenId, ReactNode> = {
     inicio: (
       <StatCards
@@ -122,15 +154,15 @@ export function App() {
         stats={[
           {
             icon: RiCheckLine,
-            label: "Registros salvos",
-            value: record ? "1" : "0",
+            label: "Atividades",
+            value: String(atividades.length),
             delta: "Local",
             deltaColor: "neutral",
           },
         ]}
       />
     ),
-    registro: <Registro record={record} onSaved={setRecord} />,
+    registro: <Registro atividades={atividades} onSaved={setAtividades} />,
     plano: (
       <StatCards
         columns={1}

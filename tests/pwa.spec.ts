@@ -1,4 +1,4 @@
-import { test as base, expect } from "@playwright/test";
+import { test as base, expect, type Page } from "@playwright/test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -7,6 +7,13 @@ import { tmpdir } from "node:os";
 // WebKit esvazia o Cache Storage quando o origin fica sem páginas, e a
 // reabertura offline falharia por limitação do navegador de teste, sem
 // relação com o app.
+// CA07 com o registro do CA01: a atividade salva continua no dia escolhido.
+const DIA = "2026-11-24";
+async function verDia(page: Page) {
+  await page.getByRole("tab", { name: "Registro" }).click();
+  await page.getByRole("textbox", { name: "Data", exact: true }).fill(DIA);
+  await expect(page.getByTestId("atividades")).toHaveText(/Vôlei\s*1,5 h/);
+}
 const test = base.extend({
   context: async ({ playwright, browserName }, fornecer, info) => {
     const { viewport, userAgent, screen, deviceScaleFactor, isMobile, hasTouch } = info.project.use;
@@ -81,11 +88,13 @@ test("manifest, metas, layout e persistência", async ({
     /viewport-fit=cover/,
   );
   await page.getByRole("tab", { name: "Registro" }).click();
-  await page.getByRole("textbox", { name: "Registro" }).fill("Flexões: 12");
-  await page.getByRole("button", { name: "Salvar treino" }).click();
-  await expect(page.getByTestId("record")).toHaveText("Flexões: 12");
+  await page.getByRole("textbox", { name: "Data", exact: true }).fill(DIA);
+  await page.getByRole("textbox", { name: "Atividade", exact: true }).fill("Vôlei");
+  await page.getByRole("textbox", { name: "Horas", exact: true }).fill("1,5");
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect(page.getByTestId("atividades")).toHaveText(/Vôlei\s*1,5 h/);
   await page.reload();
-  await expect(page.getByTestId("record")).toHaveText("Flexões: 12");
+  await verDia(page);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -93,7 +102,7 @@ test("manifest, metas, layout e persistência", async ({
   ).toBeTruthy();
   expect(
     await page
-      .getByRole("button", { name: "Salvar treino" })
+      .getByRole("button", { name: "Salvar", exact: true })
       .evaluate((el) => el.getBoundingClientRect().height),
   ).toBeGreaterThanOrEqual(44);
   expect(foreign).toEqual([]);
@@ -109,14 +118,13 @@ test("manifest, metas, layout e persistência", async ({
     .toBeTruthy();
   await context.setOffline(true);
   await page.reload();
-  await expect(page.getByTestId("record")).toHaveText("Flexões: 12");
+  await verDia(page);
   await page.close();
   expect(context.pages()).toHaveLength(0);
   // Sem nenhuma página por 20 s: tempo suficiente para o navegador encerrar o SW.
   await new Promise((resolve) => setTimeout(resolve, 20_000));
   const reopened = await context.newPage();
   await reopened.goto(baseURL!);
-  await reopened.getByRole("tab", { name: "Registro" }).click();
-  await expect(reopened.getByTestId("record")).toHaveText("Flexões: 12");
+  await verDia(reopened);
   expect(foreign).toEqual([]);
 });
