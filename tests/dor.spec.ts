@@ -1,0 +1,207 @@
+import { test, expect, type Page } from "@playwright/test";
+
+// CA04 (RAFA-176), CA04-1 a CA04-4 da RAFA-184: dor ou desconforto do dia na
+// tela Dor e o histórico dos dias com dor, com o "hoje" do relógio do Playwright.
+const KEY_DOR = "treino-pwa:dor:v1";
+const KEY_ATIVIDADES = "treino-pwa:atividades:v1";
+const HOJE = "2026-11-24";
+
+const data = (page: Page) => page.getByRole("textbox", { name: "Data", exact: true });
+const texto = (page: Page) => page.getByRole("textbox", { name: "Texto", exact: true });
+const icone = (page: Page, nome: string) =>
+  page.getByRole("group", { name: "Ícones" }).getByRole("button", { name: nome, exact: true });
+const salvar = (page: Page) => page.getByRole("button", { name: "Salvar", exact: true });
+const dias = (page: Page) => page.getByTestId("historico").locator(":scope > li");
+const lerDor = (page: Page) => page.evaluate((k) => localStorage.getItem(k), KEY_DOR);
+const anotacoes = async (page: Page) => JSON.parse((await lerDor(page)) ?? "[]") as unknown[];
+
+async function abrir(page: Page) {
+  await page.clock.setFixedTime(new Date(`${HOJE}T10:00:00`));
+  await page.goto("./#dor");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Dor");
+}
+async function anotar(page: Page, dia: string, marcados: string[], escrito = "") {
+  await data(page).fill(dia);
+  for (const nome of marcados) await icone(page, nome).click();
+  await texto(page).fill(escrito);
+  await salvar(page).click();
+}
+async function nadaGravado(page: Page) {
+  expect(await lerDor(page)).toBeNull();
+  await expect(page.getByTestId("historico")).toHaveCount(0);
+  await expect(page.getByText("Nenhuma dor", { exact: true })).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByText("Não foi possível salvar neste dispositivo.")).toHaveCount(0);
+}
+async function semRolagemEAlvos(page: Page) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  for (const alvo of await page.locator("main form input, main form button").all()) {
+    const box = (await alvo.boundingBox())!;
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    expect(box.width).toBeGreaterThanOrEqual(44);
+  }
+}
+
+test("CA04-1 e CA04-3: anota a dor de hoje sem atividade, duas no mesmo dia, e mantém ao reabrir", async ({
+  page,
+  context,
+}) => {
+  await abrir(page);
+  await expect(data(page)).toHaveValue(HOJE);
+  await expect(page.getByText("Nenhuma dor", { exact: true })).toBeVisible();
+  await icone(page, "Dor muscular").click();
+  await icone(page, "Dor nas costas").click();
+  await expect(icone(page, "Dor muscular")).toHaveAttribute("aria-pressed", "true");
+  await icone(page, "Dor muscular").click();
+  await expect(icone(page, "Dor muscular")).toHaveAttribute("aria-pressed", "false");
+  await icone(page, "Dor muscular").click();
+  await salvar(page).click();
+  // Formulário limpo para a próxima anotação; a data fica.
+  await expect(icone(page, "Dor muscular")).toHaveAttribute("aria-pressed", "false");
+  await expect(icone(page, "Dor nas costas")).toHaveAttribute("aria-pressed", "false");
+  await expect(data(page)).toHaveValue(HOJE);
+  await expect(dias(page)).toHaveText([/^24\/11\/2026\s*Dor muscular\s*Dor nas costas$/]);
+
+  // CA04-3: outra anotação no mesmo dia, só com texto livre.
+  await anotar(page, HOJE, [], "ombro deslocado");
+  await expect(texto(page)).toHaveValue("");
+  await expect(dias(page)).toHaveCount(1);
+  await expect(dias(page).first().getByRole("listitem")).toHaveText([
+    /^Dor muscular\s*Dor nas costas$/,
+    /^ombro deslocado$/,
+  ]);
+  // Sem atividade registrada no dia.
+  expect(await page.evaluate((k) => localStorage.getItem(k), KEY_ATIVIDADES)).toBeNull();
+  expect(await anotacoes(page)).toHaveLength(2);
+  await semRolagemEAlvos(page);
+
+  // Fecha o app e reabre numa página nova do mesmo aparelho.
+  await page.close();
+  const reaberta = await context.newPage();
+  await reaberta.goto("./");
+  await reaberta.getByRole("tab", { name: "Dor", exact: true }).click();
+  await expect(dias(reaberta)).toHaveCount(1);
+  await expect(dias(reaberta).first().getByRole("listitem")).toHaveText([
+    /^Dor muscular\s*Dor nas costas$/,
+    /^ombro deslocado$/,
+  ]);
+  await expect(reaberta.getByRole("alert")).toHaveCount(0);
+});
+
+test("CA04-1: anota numa data escolhida que tem atividade, ícone e texto juntos", async ({ page }) => {
+  await abrir(page);
+  await page.evaluate(
+    ([k]) => localStorage.setItem(k, JSON.stringify([{ id: "a", data: "2026-11-20", nome: "Vôlei", horas: 1 }])),
+    [KEY_ATIVIDADES],
+  );
+  await anotar(page, "2026-11-20", ["Cãibra"], "panturrilha");
+  await expect(dias(page)).toHaveText([/^20\/11\/2026\s*Cãibra\s*panturrilha$/]);
+  expect(await anotacoes(page)).toEqual([
+    expect.objectContaining({ data: "2026-11-20", icones: ["caibra"], texto: "panturrilha" }),
+  ]);
+});
+
+test("CA04-4: histórico só com os dias com dor, do mais recente ao mais antigo", async ({ page }) => {
+  await abrir(page);
+  await anotar(page, "2026-11-10", ["Dor articular"]);
+  await anotar(page, "2026-11-23", ["Falta de ar ou tontura", "Outro"], "subida");
+  await anotar(page, "2025-12-31", [], "joelho");
+  await anotar(page, "2026-11-10", [], "tornozelo");
+  await expect(dias(page)).toHaveText([
+    /^23\/11\/2026\s*Falta de ar ou tontura\s*Outro\s*subida$/,
+    /^10\/11\/2026\s*Dor articular\s*tornozelo$/,
+    /^31\/12\/2025\s*joelho$/,
+  ]);
+  // Dias sem dor (ex.: 24/11 e 11/11) não aparecem.
+  await expect(page.getByTestId("historico").getByText("24/11/2026")).toHaveCount(0);
+  await semRolagemEAlvos(page);
+});
+
+test("CA04-2: sem ícone e sem texto nada é gravado, com erro no campo", async ({ page }) => {
+  await abrir(page);
+  await salvar(page).click();
+  await expect(texto(page)).toHaveAttribute("aria-invalid", "true");
+  const erro = page.getByText("Marque ou escreva a dor", { exact: true });
+  await expect(erro).toBeVisible();
+  const erroId = await erro.getAttribute("id");
+  expect(erroId).toBeTruthy();
+  expect((await texto(page).getAttribute("aria-describedby"))?.split(" ")).toContain(erroId);
+  await nadaGravado(page);
+  // Marcar um ícone tira o erro.
+  await icone(page, "Outro").click();
+  await expect(texto(page)).not.toHaveAttribute("aria-invalid", "true");
+  await expect(erro).toHaveCount(0);
+});
+
+test("CA04-2: texto só com espaços também não grava", async ({ page }) => {
+  await abrir(page);
+  await anotar(page, HOJE, [], "   ");
+  await expect(texto(page)).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByText("Marque ou escreva a dor", { exact: true })).toBeVisible();
+  await nadaGravado(page);
+});
+
+test("CA04-2: ícone marcado e desmarcado conta como nada marcado", async ({ page }) => {
+  await abrir(page);
+  await icone(page, "Cãibra").click();
+  await icone(page, "Cãibra").click();
+  await salvar(page).click();
+  await expect(texto(page)).toHaveAttribute("aria-invalid", "true");
+  await nadaGravado(page);
+});
+
+test("recusa salvar sem data, com erro no campo", async ({ page }) => {
+  await abrir(page);
+  await anotar(page, "", ["Outro"]);
+  await expect(data(page)).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByText("Informe a data", { exact: true })).toBeVisible();
+  await nadaGravado(page);
+});
+
+// Gesto repetido no Salvar: a segunda parte encontra o formulário limpo e não
+// grava uma anotação vazia nem repete a anterior.
+for (const caso of [
+  {
+    titulo: "dblclick",
+    gesto: async (page: Page) => salvar(page).dblclick(),
+  },
+  {
+    titulo: "dois toques rápidos",
+    gesto: async (page: Page) => {
+      const box = (await salvar(page).boundingBox())!;
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 2;
+      await page.touchscreen.tap(x, y);
+      await page.waitForTimeout(150);
+      await page.touchscreen.tap(x, y);
+    },
+  },
+  {
+    titulo: "Enter duas vezes",
+    gesto: async (page: Page) => {
+      await texto(page).focus();
+      await page.keyboard.press("Enter");
+      await page.keyboard.press("Enter");
+    },
+  },
+]) {
+  test(`${caso.titulo} no Salvar grava uma anotação só`, async ({ page }) => {
+    await abrir(page);
+    await icone(page, "Dor muscular").click();
+    await texto(page).fill("coxa");
+    await caso.gesto(page);
+    await expect(dias(page)).toHaveText([/^24\/11\/2026\s*Dor muscular\s*coxa$/]);
+    expect(await anotacoes(page)).toHaveLength(1);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  });
+}
+
+test("conteúdo salvo ilegível não é sobrescrito e mostra o alerta de dispositivo", async ({ page }) => {
+  await abrir(page);
+  await page.evaluate((k) => localStorage.setItem(k, "{"), KEY_DOR);
+  await page.reload();
+  await expect(page.getByText("Nenhuma dor", { exact: true })).toBeVisible();
+  await anotar(page, HOJE, ["Outro"]);
+  await expect(page.getByRole("alert")).toHaveText("Não foi possível salvar neste dispositivo.");
+  expect(await lerDor(page)).toBe("{");
+});

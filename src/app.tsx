@@ -18,6 +18,8 @@ import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { Tab, TabList, TabPanel, Tabs } from "@/components/base/tabs/tabs";
 import { adicionar, carregar, doDia, formatHoras, hoje, parseHoras, type Atividade } from "./lib/atividades";
+import * as dorLocal from "./lib/dor";
+import { ICONES, historico, vazia, type Anotacao } from "./lib/dor";
 import * as planoLocal from "./lib/plano";
 import { TOTAL, agenda, treinoDoDia, type Plano } from "./lib/plano";
 import { SCREENS, screenFromHash, type ScreenId } from "./screens";
@@ -57,6 +59,11 @@ const ERRO_DISPOSITIVO = "Não foi possível salvar neste dispositivo.";
 function formatDia(data: string): string {
   const [a, m, d] = data.split("-").map(Number);
   return new Date(a, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
+function formatData(data: string): string {
+  const [a, m, d] = data.split("-").map(Number);
+  return new Date(a, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 // Dia local do aparelho. Recalcula ao voltar ao primeiro plano: o iOS deixa o
@@ -111,6 +118,7 @@ function RecomecarPlano({ onRecomecado }: { onRecomecado: (plano: Plano) => void
             ref={cancelarRef}
             className="min-h-11"
             variant="secondary"
+            aria-describedby="recomecar-titulo"
             onClick={() => {
               voltarFoco.current = true;
               setConfirmando(false);
@@ -379,6 +387,109 @@ function Registro({ atividades, onSaved }: { atividades: Atividade[]; onSaved: (
   );
 }
 
+// CA04 (RAFA-176), CA04-1 a CA04-4 (RAFA-184): dor ou desconforto do dia, com
+// ícones da lista fixa e/ou texto livre, e o histórico dos dias com dor.
+function Dor({ dores, onSaved }: { dores: Anotacao[]; onSaved: (lista: Anotacao[]) => void }) {
+  const [data, setData] = useState(() => hoje());
+  const [icones, setIcones] = useState<string[]>([]);
+  const [texto, setTexto] = useState("");
+  const [semDor, setSemDor] = useState(false);
+  const [error, setError] = useState("");
+  const dias = historico(dores);
+  const alternar = (id: string) => {
+    setSemDor(false);
+    setIcones((atual) => (atual.includes(id) ? atual.filter((i) => i !== id) : [...atual, id]));
+  };
+  return (
+    <>
+      <form
+        className={CARD}
+        onSubmit={(event) => {
+          event.preventDefault();
+          // CA04-2: nada marcado e nada escrito, nada é gravado.
+          if (vazia({ icones, texto })) {
+            setSemDor(true);
+            return;
+          }
+          try {
+            onSaved(dorLocal.adicionar(localStorage, { data, icones, texto }));
+            setIcones([]);
+            setTexto("");
+            setError("");
+          } catch {
+            setError(ERRO_DISPOSITIVO);
+          }
+        }}
+      >
+        <Input label="Data" type="date" value={data} onChange={setData} isRequired errorMessage="Informe a data" />
+        <div role="group" aria-label="Ícones" className="flex flex-wrap gap-2">
+          {ICONES.map(({ id, nome, icone }) => {
+            const marcado = icones.includes(id);
+            return (
+              <Button
+                key={id}
+                variant={marcado ? "primary" : "secondary"}
+                leadingIcon={icone}
+                aria-pressed={marcado}
+                className="min-h-11"
+                onClick={() => alternar(id)}
+              >
+                {nome}
+              </Button>
+            );
+          })}
+        </div>
+        <Input
+          label="Texto"
+          value={texto}
+          onChange={(valor) => {
+            setSemDor(false);
+            setTexto(valor);
+          }}
+          isInvalid={semDor}
+          errorMessage="Marque ou escreva a dor"
+        />
+        <Button type="submit" className="min-h-11">
+          Salvar
+        </Button>
+      </form>
+      <section className={CARD} aria-label="Histórico">
+        {dias.length ? (
+          <ol data-testid="historico" className="flex flex-col gap-4">
+            {dias.map((dia) => (
+              <li key={dia.data} className="flex flex-col gap-2">
+                <h2 className="text-headline-medium">{formatData(dia.data)}</h2>
+                <ul className="flex flex-col gap-2">
+                  {dia.anotacoes.map((anotacao) => (
+                    <li key={anotacao.id} className="flex flex-wrap items-center gap-2">
+                      {anotacao.icones.map((id) => {
+                        const item = ICONES.find((i) => i.id === id);
+                        const Icone = item?.icone;
+                        return (
+                          <Chip key={id} color="rose" className="gap-1">
+                            {Icone && <Icone className="size-4" aria-hidden />}
+                            {item?.nome ?? id}
+                          </Chip>
+                        );
+                      })}
+                      {anotacao.texto && (
+                        <span className="text-body-regular break-words">{anotacao.texto}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="text-body-regular text-text-secondary">Nenhuma dor</p>
+        )}
+      </section>
+      {error && <p role="alert">{error}</p>}
+    </>
+  );
+}
+
 export function App() {
   const [swRegistration, setSwRegistration] = useState<ServiceWorkerRegistration>();
   const {
@@ -398,6 +509,13 @@ export function App() {
       return [];
     }
   });
+  const [dores, setDores] = useState<Anotacao[]>(() => {
+    try {
+      return dorLocal.carregar(localStorage);
+    } catch {
+      return [];
+    }
+  });
   const [salvo, setSalvo] = useState<Salvo>(lerSalvo);
   const setPlano = (plano: Plano) => setSalvo({ plano, invalido: false });
   const [dia, setDia] = useHoje();
@@ -410,7 +528,7 @@ export function App() {
     setScreen(id);
     history.replaceState(null, "", id === "inicio" ? location.pathname : `#${id}`);
   };
-  // Telas sem feature: placeholders com StatCards reais; dados chegam nas RAFA-184 a 186.
+  // Telas sem feature: placeholders com StatCards reais; dados chegam nas RAFA-185 e 186.
   const content: Record<ScreenId, ReactNode> = {
     inicio: (
       <Inicio
@@ -430,12 +548,7 @@ export function App() {
     ),
     registro: <Registro atividades={atividades} onSaved={setAtividades} />,
     plano: <PlanoTela salvo={salvo} dia={dia} onIniciado={setPlano} />,
-    dor: (
-      <StatCards
-        columns={1}
-        stats={[{ icon: RiFirstAidKitLine, label: "Registros", value: "0", delta: "Local", deltaColor: "neutral" }]}
-      />
-    ),
+    dor: <Dor dores={dores} onSaved={setDores} />,
     estatisticas: (
       <StatCards
         columns={2}

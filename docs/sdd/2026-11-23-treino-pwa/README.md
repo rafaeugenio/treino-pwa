@@ -1,4 +1,4 @@
-# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182 e RAFA-183
+# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182, RAFA-183 e RAFA-184
 
 ## Spec
 
@@ -214,3 +214,36 @@ Editor do plano pela UI, validação clínica, reiniciar ou trocar a data D de u
 ### Gates
 
 `npm run check` com HOME falso (`rafa183-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.
+
+## RAFA-184: dor ou desconforto do dia e histórico
+
+Issue: [RAFA-184](https://linear.app/rafagg/issue/RAFA-184/05-registrar-dor-ou-desconforto-e-o-historico). Contrato: [CA04-1 a CA04-4 do card da RAFA-184](https://linear.app/rafagg/issue/RAFA-184/05-registrar-dor-ou-desconforto-e-o-historico), sem reescrita, com as decisões do Mane · Spec de 24/11/2026 22:05. Cobre o [CA04 da RAFA-176](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia).
+
+**Ícones:** os 6 do CA04-1, nessa ordem: Dor muscular, Dor articular, Dor nas costas, Cãibra, Falta de ar ou tontura e Outro, todos com texto livre opcional. A lista fica fixa num único lugar, `ICONES` em `src/lib/dor.ts` (id, nome e ícone Remix). O merge do PR depende do Bari APROVADO no head exato e do check local.
+
+### Design
+
+- Modelo em `src/lib/dor.ts`, chave nova `treino-pwa:dor:v1`: lista JSON de anotações `{ id, data, icones, texto }`. A anotação é do dia (AAAA-MM-DD local), não de uma atividade; um dia pode ter várias, e o dia não precisa ter atividade. `treino-pwa:atividades:v1` e `treino-pwa:plano:v1` não são lidas, migradas nem alteradas.
+- `icones` guarda os ids da lista, na ordem dela. Id fora da lista atual (por troca futura do conjunto) continua salvo e aparece no histórico pelo próprio id.
+- Anotação sem ícone e sem texto (texto só com espaços conta como vazio) não é gravada (CA04-2). Data vazia ou fora do calendário é recusada.
+- Conteúdo salvo que não é lista é lido como histórico vazio e não é sobrescrito: ao salvar, aparece o alerta de dispositivo e nada muda. Itens da lista que não podem ser lidos ficam guardados como estão quando uma anotação nova entra. Nenhum dado é descartado.
+- Tela Dor: Input `Data` (`type="date"`, abre em hoje, erro `Informe a data` no campo), grupo `Ícones` com um Button Board UI por ícone (`aria-pressed`, toque alterna), Input `Texto` e Button `Salvar`. Depois de salvar, ícones e texto voltam ao vazio e a data fica. Abaixo, o histórico (`data-testid="historico"`): só os dias com dor, do mais recente ao mais antigo, cada um com a data `dd/mm/aaaa` e, por anotação, Chips dos ícones e o texto. Sem dor salva, `Nenhuma dor`.
+- CA04-2 na UI: `Salvar` sem ícone e sem texto não grava e mostra `Marque ou escreva a dor` no campo Texto, com `aria-invalid` e `aria-describedby` ligado ao FieldError. Marcar um ícone ou digitar tira o erro. O alerta de dispositivo fica só para falha real de gravação.
+- Tela Registro sem mudança. O StatCards placeholder da tela Dor saiu.
+- Follow-up Bari: no `Recomeçar plano`, o `Cancelar` ganhou `aria-describedby="recomecar-titulo"`, sem mudar o fluxo da confirmação.
+
+### Fora desta entrega
+
+Editar ou apagar anotação, vínculo com atividade, exportar ou compartilhar relatório (PDF, e-mail), export/import JSON, Apple Saúde, Strava e wearables, o app de lesões da RAFA-178, CA05 (RAFA-185) e CA06 (RAFA-186).
+
+### Tarefas
+
+- [x] `src/lib/dor.ts` e `src/lib/dor.test.ts`: lista fixa, gravação por dia só com ícones ou só com texto, leitura por outra instância, CA04-2, data inválida, duas anotações no mesmo dia, ordem do histórico, conteúdo ilegível não sobrescrito, itens ilegíveis preservados e quota.
+- [x] Tela Dor em `src/app.tsx`.
+- [x] `tests/dor.spec.ts` (WebKit iPhone 15 e Chromium, 390×844, relógio do Playwright): CA04-1 com hoje por padrão, sem atividade no dia e reabertura; CA04-1 em data escolhida com atividade; CA04-3; CA04-4; CA04-2 (nada marcado, texto só com espaços, ícone marcado e desmarcado); data vazia; dblclick, dois toques com 150 ms e Enter duplo no Salvar gravando uma anotação só; conteúdo ilegível não sobrescrito; alvos de 44 px e sem rolagem horizontal.
+- [x] `tests/plano.spec.ts`: o Cancelar do `Recomeçar plano` é descrito pelo título.
+- [ ] Revisão Bari no head exato e merge pelo responsável.
+
+### Gates
+
+`npm run check` com HOME falso (`rafa184-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.

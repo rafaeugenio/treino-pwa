@@ -388,4 +388,8 @@ test("CA03-B3: a confirmação tem o título Recomeçar plano? para o leitor de 
   await expect(page.getByRole("heading", { level: 2, name: "Recomeçar plano?" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Recomeçar plano?" })).toBeVisible();
   await expect(page.getByRole("tabpanel").locator("p")).toHaveCount(0);
+  // Follow-up Bari: o Cancelar, que recebe o foco, é descrito pelo título.
+  const cancelar = page.getByRole("button", { name: "Cancelar", exact: true });
+  await expect(cancelar).toHaveAttribute("aria-describedby", "recomecar-titulo");
+  await expect(cancelar).toHaveAccessibleDescription("Recomeçar plano?");
 });
