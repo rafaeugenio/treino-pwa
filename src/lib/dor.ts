@@ -10,8 +10,11 @@ import {
   RiUser3Line,
 } from "@remixicon/react";
 import { hoje } from "./atividades";
+import { guardarBackup, type StorageBackup } from "./backup";
 
 export const KEY = "treino-pwa:dor:v1";
+/** CA03 da RAFA-228: prefixo das chaves com o conteúdo ilegível, uma por recomeço. */
+export const BACKUP = `${KEY}:backup:`;
 
 /**
  * Os 6 ícones do CA04-1 da RAFA-184, nessa ordem, todos com texto livre
@@ -82,6 +85,26 @@ function bruto(storage: Pick<Storage, "getItem">): unknown[] | null {
 /** Lê as anotações válidas; conteúdo corrompido vira lista vazia, sem apagar. */
 export function carregar(storage: Pick<Storage, "getItem">): Anotacao[] {
   return (bruto(storage) ?? []).filter(valida);
+}
+
+/** Anotações válidas e se o conteúdo salvo não pode ser lido como lista (CA03 da RAFA-228). */
+export function ler(storage: Pick<Storage, "getItem">): { anotacoes: Anotacao[]; ilegivel: boolean } {
+  const atual = bruto(storage);
+  return { anotacoes: (atual ?? []).filter(valida), ilegivel: atual === null };
+}
+
+/**
+ * CA03 da RAFA-228: só com conteúdo salvo que não pode ser lido. Copia esse
+ * conteúdo para uma chave de backup e, depois, grava a lista nova, vazia.
+ * CA05: se o backup falhar, a chave fica intacta e o erro propaga. L1: backup
+ * de mesmo conteúdo não é repetido numa nova tentativa.
+ */
+export function recomecar(storage: StorageBackup, agora: Date = new Date()): Anotacao[] {
+  const texto = storage.getItem(KEY);
+  if (texto === null || bruto(storage) !== null) throw new Error("conteúdo salvo legível");
+  guardarBackup(storage, BACKUP, texto, agora);
+  storage.setItem(KEY, "[]");
+  return [];
 }
 
 /**

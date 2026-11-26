@@ -1,6 +1,10 @@
 // Atividades diárias (CA01 da RAFA-176): data, nome e horas, só no aparelho.
 // Chave nova: o texto demonstrativo de treino-pwa:registro:v1 não é migrado.
+import { guardarBackup, type StorageBackup } from "./backup";
+
 export const KEY = "treino-pwa:atividades:v1";
+/** CA02 da RAFA-228: prefixo das chaves com as entradas inválidas guardadas. */
+export const BACKUP = `${KEY}:backup:`;
 
 export interface Atividade {
   id: string;
@@ -47,27 +51,52 @@ function valida(item: unknown): item is Atividade {
 
 /** Lê a lista salva; conteúdo corrompido ou de outro formato vira lista vazia. */
 export function carregar(storage: Pick<Storage, "getItem">): Atividade[] {
+  return salvas(storage).filter(valida);
+}
+
+/**
+ * Grava uma atividade nova e devolve a lista completa. CA02 da RAFA-228:
+ * entradas salvas que não passam em `valida` vão para uma chave de backup antes
+ * da regravação. CA04: conteúdo salvo que não é lista JSON vai inteiro, bruto,
+ * para uma chave de backup antes da gravação. CA05: se o backup falhar, nada é
+ * regravado e o erro propaga. L1: backup de mesmo conteúdo não é repetido.
+ */
+export function adicionar(
+  storage: StorageBackup,
+  nova: Omit<Atividade, "id">,
+  id: string = crypto.randomUUID(),
+  agora: Date = new Date(),
+): Atividade[] {
+  const atividade: Atividade = { ...nova, id, nome: nova.nome.trim() };
+  if (!valida(atividade)) throw new Error("atividade inválida");
+  const bruto = storage.getItem(KEY);
+  if (bruto && naoLista(bruto)) guardarBackup(storage, BACKUP, bruto, agora);
+  const invalidas = salvas(storage).filter((item) => !valida(item));
+  if (invalidas.length) guardarBackup(storage, BACKUP, JSON.stringify(invalidas), agora);
+  const lista = [...carregar(storage), atividade];
+  storage.setItem(KEY, JSON.stringify(lista));
+  return lista;
+}
+
+/** CA04: JSON inválido ou valor que não é lista. */
+function naoLista(bruto: string): boolean {
+  try {
+    return !Array.isArray(JSON.parse(bruto));
+  } catch {
+    return true;
+  }
+}
+
+/** Itens da lista salva, válidos ou não; conteúdo que não é lista fica de fora. */
+function salvas(storage: Pick<Storage, "getItem">): unknown[] {
   const bruto = storage.getItem(KEY);
   if (!bruto) return [];
   try {
     const lista: unknown = JSON.parse(bruto);
-    return Array.isArray(lista) ? lista.filter(valida) : [];
+    return Array.isArray(lista) ? lista : [];
   } catch {
     return [];
   }
-}
-
-/** Grava uma atividade nova e devolve a lista completa. Falha de quota propaga. */
-export function adicionar(
-  storage: Pick<Storage, "getItem" | "setItem">,
-  nova: Omit<Atividade, "id">,
-  id: string = crypto.randomUUID(),
-): Atividade[] {
-  const atividade: Atividade = { ...nova, id, nome: nova.nome.trim() };
-  if (!valida(atividade)) throw new Error("atividade inválida");
-  const lista = [...carregar(storage), atividade];
-  storage.setItem(KEY, JSON.stringify(lista));
-  return lista;
 }
 
 export function doDia(lista: readonly Atividade[], data: string): Atividade[] {
