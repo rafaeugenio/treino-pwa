@@ -97,7 +97,19 @@ function lerSalvo(): Salvo {
 // repetido não pode cair no Confirmar. No estado de confirmação o lugar do
 // gatilho fica com o título, o foco vai para o Cancelar e o Confirmar fica por
 // último.
-function Recomecar({ acao, tituloId, onConfirmar }: { acao: string; tituloId: string; onConfirmar: () => void }) {
+// RAFA-247 CA02, via (a): onAbrir avisa a tela que a confirmação abriu, para a
+// tela limpar o próprio erro; o Recomecar não lê nem altera o estado da tela.
+function Recomecar({
+  acao,
+  tituloId,
+  onConfirmar,
+  onAbrir,
+}: {
+  acao: string;
+  tituloId: string;
+  onConfirmar: () => void;
+  onAbrir?: () => void;
+}) {
   const [confirmando, setConfirmando] = useState(false);
   const [error, setError] = useState("");
   const recomecarRef = useRef<HTMLButtonElement>(null);
@@ -145,7 +157,14 @@ function Recomecar({ acao, tituloId, onConfirmar }: { acao: string; tituloId: st
         </section>
       ) : (
         <div className={CARD}>
-          <Button ref={recomecarRef} className="min-h-11" onClick={() => setConfirmando(true)}>
+          <Button
+            ref={recomecarRef}
+            className="min-h-11"
+            onClick={() => {
+              onAbrir?.();
+              setConfirmando(true);
+            }}
+          >
             {acao}
           </Button>
         </div>
@@ -498,6 +517,7 @@ function Dor({
         <Recomecar
           acao="Recomeçar anotações de dor"
           tituloId="recomecar-dor-titulo"
+          onAbrir={() => setError("")}
           onConfirmar={() => {
             onSaved(dorLocal.recomecar(localStorage));
             setError("");
