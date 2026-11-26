@@ -28,8 +28,10 @@ const centesimos = (horas: number) => Math.round(horas * 100);
 /**
  * RAFA-229 CA01: atividades livres com o mesmo nome, desconsiderando maiúsculas
  * e espaços das pontas, somam numa linha só. Acentos continuam no nome.
+ * RAFA-247 CA03: a chave vai para NFC, então "Vôlei" em NFC e em NFD
+ * (o + U+0302) somam juntos; "Volei", sem acento, segue separado.
  */
-const chave = (nome: string) => nome.trim().toLocaleLowerCase("pt-BR");
+const chave = (nome: string) => nome.normalize("NFC").trim().toLocaleLowerCase("pt-BR");
 
 export function horas(atividades: readonly Atividade[]): Horas {
   let plano = 0;

@@ -428,3 +428,56 @@ test("L2 na dor: colisão de instante usa o sufixo e o backup vem antes da lista
   ]);
   expect(await gravadas(page)).toEqual([`${base}-2`, KEY_DOR]);
 });
+
+// RAFA-247 CA02, via (a): a tela Dor limpa o próprio erro ao abrir a
+// confirmação do Recomeçar; se o Confirmar também falhar, fica um único alerta,
+// o do Recomeçar, logo abaixo da confirmação. O CA05 da RAFA-228 segue valendo.
+const ERRO = "Não foi possível salvar neste dispositivo.";
+const alertaDoRecomecar = (page: Page) =>
+  page.locator('section[aria-labelledby="recomecar-dor-titulo"] + p[role="alert"]');
+async function alertaDeCotaNoSalvar(page: Page) {
+  await abrirIlegivel(page);
+  await cota(page, "lista");
+  await anotar(page, HOJE, ["Outro"]);
+  await expect(page.getByRole("alert")).toHaveText(ERRO);
+}
+
+test("RAFA-247 CA02: abrir a confirmação limpa o alerta de cota do Salvar", async ({ page }) => {
+  await alertaDeCotaNoSalvar(page);
+  await recomecar(page).click();
+  await expect(tituloConfirmacao(page)).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByText(ERRO)).toHaveCount(0);
+});
+
+test("RAFA-247 CA02: Confirmar que também falha deixa um único alerta, o do Recomeçar", async ({ page }) => {
+  await alertaDeCotaNoSalvar(page);
+  await recomecar(page).click();
+  await cota(page, "backup");
+  await confirmar(page).click();
+  await expect(page.getByRole("alert")).toHaveCount(1);
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveText(ERRO);
+  await expect(alertaDoRecomecar(page)).toHaveCount(1);
+});
+
+test("RAFA-247 CA02: com o CA05 da RAFA-228, nada é gravado e a confirmação segue usável", async ({ page }) => {
+  await alertaDeCotaNoSalvar(page);
+  await recomecar(page).click();
+  await cota(page, "backup");
+  const antes = (await gravadas(page)).length;
+  await confirmar(page).click();
+  await expect(alertaDoRecomecar(page)).toHaveText(ERRO);
+  expect(await lerDor(page)).toBe("{");
+  expect(await backupsDor(page)).toEqual([]);
+  expect((await gravadas(page)).length).toBe(antes);
+  await expect(tituloConfirmacao(page)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cancelar", exact: true })).toBeEnabled();
+  await expect(confirmar(page)).toBeEnabled();
+  await cota(page, null);
+  await confirmar(page).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(recomecar(page)).toHaveCount(0);
+  expect(await backupsDor(page)).toEqual(["{"]);
+  expect(await lerDor(page)).toBe("[]");
+});
