@@ -25,18 +25,35 @@ export function doPlano(nome: string): boolean {
 // Soma em centésimos inteiros: 0,1 + 0,2 dá 0,3, sem resto de ponto flutuante.
 const centesimos = (horas: number) => Math.round(horas * 100);
 
+/**
+ * RAFA-229 CA01: atividades livres com o mesmo nome, desconsiderando maiúsculas
+ * e espaços das pontas, somam numa linha só. Acentos continuam no nome.
+ */
+const chave = (nome: string) => nome.trim().toLocaleLowerCase("pt-BR");
+
 export function horas(atividades: readonly Atividade[]): Horas {
   let plano = 0;
-  const livres = new Map<string, number>();
-  for (const { nome, horas } of atividades) {
-    if (doPlano(nome)) plano += centesimos(horas);
-    else livres.set(nome, (livres.get(nome) ?? 0) + centesimos(horas));
+  // Rótulo do registro mais recente: maior data e, no mesmo dia, o que vem
+  // depois na lista salva (ordem de gravação). Só leitura: nada é regravado.
+  const livres = new Map<string, { nome: string; data: string; total: number }>();
+  for (const { nome, data, horas } of atividades) {
+    if (doPlano(nome)) {
+      plano += centesimos(horas);
+      continue;
+    }
+    const k = chave(nome);
+    const grupo = livres.get(k);
+    if (!grupo) livres.set(k, { nome: nome.trim(), data, total: centesimos(horas) });
+    else {
+      grupo.total += centesimos(horas);
+      if (data >= grupo.data) Object.assign(grupo, { nome: nome.trim(), data });
+    }
   }
   return {
     plano: plano / 100,
-    livres: [...livres]
-      .sort(([a, x], [b, y]) => y - x || a.localeCompare(b, "pt-BR"))
-      .map(([nome, total]) => ({ nome, horas: total / 100 })),
+    livres: [...livres.values()]
+      .sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome, "pt-BR"))
+      .map(({ nome, total }) => ({ nome, horas: total / 100 })),
   };
 }
 

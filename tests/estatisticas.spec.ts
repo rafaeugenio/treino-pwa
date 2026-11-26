@@ -149,3 +149,44 @@ test("CA05: registro novo e treino feito entram nos totais sem recarregar", asyn
   await conferirComSalvo(page);
   await semRolagemEAlvos(page);
 });
+
+// RAFA-229: nomes iguais, desconsiderando maiúsculas e espaços das pontas,
+// somam numa linha só; acentos seguem separados e os registros ficam intactos.
+const VOLEI = () => [
+  reg("Vôlei", 1, "2026-11-22"),
+  reg("vôlei", 1.5, "2026-11-23"),
+  reg("Futebol", 2, "2026-11-23"),
+  reg(" Vôlei ", 0.5, D),
+  reg("Volei", 1, D),
+];
+
+test("RAFA-229 CA01: Vôlei, vôlei e ' Vôlei ' numa linha, rótulo do mais recente sem espaços", async ({ page }) => {
+  await abrir(page, { [ATIVIDADES]: VOLEI() });
+  await expect(livres(page)).toHaveText([/^Vôlei\s*3 h$/, /^Futebol\s*2 h$/, /^Volei\s*1 h$/]);
+  // Rótulo exato, sem os espaços das pontas do registro mais recente.
+  expect(await livres(page).first().evaluate((li) => li.querySelector("span")!.textContent)).toBe("Vôlei");
+  await semRolagemEAlvos(page);
+});
+
+test("RAFA-229 CA02: o histórico mostra cada registro como foi guardado", async ({ page }) => {
+  const semeados = VOLEI();
+  await abrir(page, { [ATIVIDADES]: semeados });
+  await expect(livres(page)).toHaveCount(3);
+  const guardado = JSON.stringify(semeados);
+  await tab(page, "Registro");
+  const lista = page.getByTestId("atividades").getByRole("listitem");
+  // Primeiro span de cada item: o nome; o segundo é o Chip das horas.
+  const nomes = () => lista.evaluateAll((itens) => itens.map((li) => li.querySelector("span")!.textContent));
+  await page.getByRole("textbox", { name: "Data", exact: true }).fill("2026-11-22");
+  await expect(lista).toHaveCount(1);
+  expect(await nomes()).toEqual(["Vôlei"]);
+  await page.getByRole("textbox", { name: "Data", exact: true }).fill("2026-11-23");
+  await expect(lista).toHaveCount(2);
+  expect(await nomes()).toEqual(["vôlei", "Futebol"]);
+  await page.getByRole("textbox", { name: "Data", exact: true }).fill(D);
+  await expect(lista).toHaveCount(2);
+  expect(await nomes()).toEqual([" Vôlei ", "Volei"]);
+  // Nada foi regravado para normalizar nomes.
+  expect(await page.evaluate((chave) => localStorage.getItem(chave), ATIVIDADES)).toBe(guardado);
+  await semRolagemEAlvos(page);
+});

@@ -1,4 +1,4 @@
-# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182, RAFA-183, RAFA-184, RAFA-185, RAFA-186 e RAFA-228
+# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182, RAFA-183, RAFA-184, RAFA-185, RAFA-186, RAFA-228 e RAFA-229
 
 ## Spec
 
@@ -341,3 +341,29 @@ Tela para ver, editar ou restaurar backup; migração de `treino-pwa:registro:v1
 ### Gates
 
 `npm run check` com HOME falso (`rafa228-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.
+
+## RAFA-229: agrupar atividades com o mesmo nome nas estatísticas
+
+Issue: [RAFA-229](https://linear.app/rafagg/issue/RAFA-229/agrupar-atividades-com-o-mesmo-nome-nas-estatisticas-do-treino), sub-issue de dev [RAFA-230](https://linear.app/rafagg/issue/RAFA-230/implementar-agrupamento-de-atividades-iguais-nas-estatisticas). Contrato: [CA01 e CA02 do card da RAFA-229](https://linear.app/rafagg/issue/RAFA-229/agrupar-atividades-com-o-mesmo-nome-nas-estatisticas-do-treino), sem reescrita. Follow-up do achado B3 da revisão da [RAFA-185](https://linear.app/rafagg/issue/RAFA-185/06-exibir-estatisticas-de-horas-e-progresso) (treino-pwa#9): "Vôlei" e "vôlei" viravam duas linhas. Substitui, só no agrupamento das atividades livres, a regra "agrupados pelo nome salvo" da seção RAFA-185 acima.
+
+### Design
+
+- Só a leitura das estatísticas muda, em `horas()` de `src/lib/estatisticas.ts`. A chave das atividades livres passa a ser `nome.trim().toLocaleLowerCase("pt-BR")`: ignora maiúsculas e espaços das pontas. Acentos e espaços internos continuam fazendo parte do nome, então "Volei" e "Vôlei" seguem em linhas distintas (fora de escopo do card).
+- Rótulo da linha (CA01): o nome do registro mais recente do grupo, com `trim()`. Mais recente = maior `data` (AAAA-MM-DD); no mesmo dia, o que vem depois na lista salva, que é a ordem de gravação (`adicionar` sempre acrescenta no fim). Não há carimbo de tempo novo.
+- Linha do plano: segue o CA02 da RAFA-185 sem mudança, pelo nome exato de `Treino 1` a `Treino 28`.
+- Ordem: do maior para o menor total; empate em ordem alfabética pt-BR do rótulo.
+- Histórico (CA02): o Registro continua listando cada registro com o nome guardado. Nada é regravado: `adicionar`, `carregar` e a chave `treino-pwa:atividades:v1` não mudam, e não há tela de mesclar nem de renomear.
+
+### Fora desta entrega
+
+Ignorar acentos, renomear ou mesclar atividades pela UI e o B2 (atividade livre chamada "Plano de calistenia"), aceito como risco nesta versão. Arredondamento de centésimos (B1 da #9) e a virada do dia e proteção de dados locais (RAFA-228) ficam fora.
+
+### Tarefas
+
+- [x] `src/lib/estatisticas.ts` e `src/lib/estatisticas.test.ts`: agrupamento de maiúsculas e espaços, rótulo do mais recente sem espaços das pontas (por data e, no mesmo dia, pela ordem da lista), acentos separados e lista de entrada intacta.
+- [x] `tests/estatisticas.spec.ts` (WebKit iPhone 15 e Chromium, 390×844): CA01 com uma linha de Vôlei e acentos separados; CA02 com o Registro mostrando os nomes como guardados e a chave sem regravação.
+- [ ] Revisão no head exato e merge pelo responsável.
+
+### Gates
+
+`npm run check` com HOME falso (`rafa229-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.
