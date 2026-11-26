@@ -1,4 +1,4 @@
-# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182, RAFA-183, RAFA-184, RAFA-185, RAFA-186, RAFA-228 e RAFA-229
+# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182, RAFA-183, RAFA-184, RAFA-185, RAFA-186, RAFA-228, RAFA-229 e RAFA-247
 
 ## Spec
 
@@ -14,7 +14,7 @@ Requisitos originais copiados abaixo; D3 substitui a stack do requisito 7. Decis
  5. Opcional: ícones de dor ou desconforto (opções predefinidas) mais campo de texto livre (ex.: ombro deslocado), para revisar depois em consulta. Se não sentiu nada, nada fica marcado. Precisa de visão de histórico desses registros.
  6. Lembretes por notificação de PWA onde o iOS permitir (Web Push no iOS 16.4+ só com o app instalado na tela inicial; se não der, fallback explicado) e estatísticas.
  7. Stack: Toolcraft, Board UI e Dialkit, a mesma do protótipo TFD.
- 8. Repo pessoal novo no GitHub, publicado no GitHub Pages (nunca Vercel), para abrir no Safari do iPhone e instalar na tela inicial: manifest, service worker, ícones apple-touch e funcionamento offline. Dados só no aparelho (localStorage ou IndexedDB), sem backend. Repo público é aceitável (não há dados sensíveis no código).
+ 8. Repo pessoal novo no GitHub, publicado na Vercel pessoal do Rafael (conta RafaGG), num projeto novo só para o treino-pwa (D4, substitui o requisito original), para abrir no Safari do iPhone e instalar na tela inicial: manifest, service worker, ícones apple-touch e funcionamento offline. Dados só no aparelho (localStorage ou IndexedDB), sem backend. Repo público é aceitável (não há dados sensíveis no código).
  9. Mobile-first: ícones e componentes dimensionados e dispostos primeiro para a tela do celular, com alvos de toque adequados e safe areas do iPhone.
 10. UI muito limpa e minimalista: sem subtítulos, sem legendas grandes, sem textos de ajuda pequenos embaixo dos componentes. Mínimo de texto.
 11. Usar componentes do Board UI em todas as telas, inclusive o dashboard, e não só os ícones: cards, stats, listas, forms, tabs, calendário, drawer, modal etc.
@@ -308,7 +308,7 @@ Notificação push e servidor de push (RAFA-179); lembrete com horário, som, vi
 
 ## RAFA-228: virada do dia e dados locais inválidos
 
-Issue: [RAFA-228](https://linear.app/rafagg/issue/RAFA-228/ajustar-virada-do-dia-e-proteger-dados-locais-invalidos-no-registro-e). Contrato: [CA01 a CA03 do card da RAFA-228](https://linear.app/rafagg/issue/RAFA-228/ajustar-virada-do-dia-e-proteger-dados-locais-invalidos-no-registro-e), sem reescrita. Follow-up da RAFA-182 ([treino-pwa#6](https://github.com/rafaeugenio/treino-pwa/pull/6)), com a chave de dor da RAFA-184 e a regra da RAFA-183: vale o dia do aparelho e nenhum dado se perde em silêncio. Card mãe: [RAFA-176](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia).
+Issue: [RAFA-228](https://linear.app/rafagg/issue/RAFA-228/ajustar-virada-do-dia-e-proteger-dados-locais-invalidos-no-registro-e). Contrato: [CA01 a CA05 do card da RAFA-228](https://linear.app/rafagg/issue/RAFA-228/ajustar-virada-do-dia-e-proteger-dados-locais-invalidos-no-registro-e), sem reescrita. Follow-up da RAFA-182 ([treino-pwa#6](https://github.com/rafaeugenio/treino-pwa/pull/6)), com a chave de dor da RAFA-184 e a regra da RAFA-183: vale o dia do aparelho e nenhum dado se perde em silêncio. Card mãe: [RAFA-176](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia).
 
 ### Design
 
@@ -367,3 +367,31 @@ Ignorar acentos, renomear ou mesclar atividades pela UI e o B2 (atividade livre 
 ### Gates
 
 `npm run check` com HOME falso (`rafa229-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.
+
+## RAFA-247: observações não bloqueantes do Bari
+
+Issue: [RAFA-247](https://linear.app/rafagg/issue/RAFA-247/corrigir-observacoes-nao-bloqueantes-do-bari-no-treino-pwa). Contrato: [CA01 a CA04 do card da RAFA-247](https://linear.app/rafagg/issue/RAFA-247/corrigir-observacoes-nao-bloqueantes-do-bari-no-treino-pwa), sem reescrita, com as decisões do Mane no card. Follow-up das observações baixas do Bari nas revisões do treino-pwa#11 (r2, review 6066967883), do #12 (r1, review 6066823340) e da configuração de deploy na main. Card mãe: [RAFA-176](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia). O comportamento já entregue não muda.
+
+### Design
+
+- CA01: este SDD. O requisito 8 da Spec registra a Vercel pessoal (D4 do card da RAFA-176) no lugar do GitHub Pages, e o Contrato da seção RAFA-228 passa a citar CA01 a CA05.
+- CA02, via (a) do Mane: a tela Dor limpa o próprio erro ao abrir a confirmação do Recomeçar anotações de dor. `Recomecar` em `src/app.tsx` ganha só um aviso opcional `onAbrir`, chamado no toque do gatilho; a Dor passa `onAbrir={() => setError("")}` e o Recomeçar plano não passa nada. `Recomecar` continua com o próprio erro e não lê nem altera o estado da tela. Se o Confirmar também falhar, sobra um único `role=alert`, o do `Recomecar`. Texto e layout da Dor não mudam. O CA05 da RAFA-228 segue: nada é gravado e a confirmação continua aberta com Cancelar e Confirmar ativos.
+- CA03: em `horas()` de `src/lib/estatisticas.ts`, a chave das atividades livres passa a ser `nome.normalize("NFC").trim().toLocaleLowerCase("pt-BR")`. "Vôlei" em NFC e em NFD (`o` + U+0302) somam numa linha só. "Volei", sem acento, continua separado. O rótulo segue o nome do registro mais recente, com `trim()`, como na RAFA-229. Só a leitura muda: `adicionar`, `carregar` e a chave `treino-pwa:atividades:v1` ficam como estão, e nenhum registro é regravado.
+- CA04: `engines.node` = `^22.12.0` no `package.json` e `.nvmrc` com `22`, a mesma linha do projeto na Vercel, que atende ao Vite 8.
+
+### Fora desta entrega
+
+Settings do projeto na Vercel (versão do Node lá), só com OK direto do Rafael; o backup do CA02 da RAFA-228 reserializado (`JSON.stringify(invalidas)`), risco baixo aceito; ignorar acentos ou maiúsculas além do que a RAFA-229 já faz; qualquer outra mudança de texto ou de layout da tela Dor; `vercel.json`.
+
+### Tarefas
+
+- [x] SDD desta seção, requisito 8 e Contrato da RAFA-228 antes do código (CA01).
+- [ ] CA02: `onAbrir` no `Recomecar` e a Dor limpando o próprio erro, com testes em `tests/dor.spec.ts` (erro limpo ao abrir a confirmação, um único `role=alert` com o erro do Recomeçar, CA05 da RAFA-228 sem gravação e sem travar).
+- [ ] CA03: chave em NFC em `horas()`, com testes em `src/lib/estatisticas.test.ts` e `tests/estatisticas.spec.ts` (NFC e NFD numa linha, "Volei" separado, registros guardados intactos).
+- [ ] CA04: `engines.node` e `.nvmrc`; `npm run check` em Node 22.
+- [ ] Prova de vermelho de cada guarda nova no Verification do PR.
+- [ ] Revisão no head exato e merge pelo responsável.
+
+### Gates
+
+`npm run check` com HOME falso e Node 22 (`RAFA-247-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.
