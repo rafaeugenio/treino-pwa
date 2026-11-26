@@ -388,8 +388,8 @@ Settings do projeto na Vercel (versão do Node lá), só com OK direto do Rafael
 - [x] SDD desta seção, requisito 8 e Contrato da RAFA-228 antes do código (CA01).
 - [x] CA02: `onAbrir` no `Recomecar` e a Dor limpando o próprio erro, com testes em `tests/dor.spec.ts` (erro limpo ao abrir a confirmação, um único `role=alert` com o erro do Recomeçar, CA05 da RAFA-228 sem gravação e sem travar).
 - [x] CA03: chave em NFC em `horas()`, com testes em `src/lib/estatisticas.test.ts` e `tests/estatisticas.spec.ts` (NFC e NFD numa linha, "Volei" separado, registros guardados intactos).
-- [ ] CA04: `engines.node` e `.nvmrc`; `npm run check` em Node 22.
-- [ ] Prova de vermelho de cada guarda nova no Verification do PR.
+- [x] CA04: `engines.node` e `.nvmrc`; `npm run check` em Node 22.
+- [x] Prova de vermelho de cada guarda nova no Verification do PR.
 - [ ] Revisão no head exato e merge pelo responsável.
 
 ### Gates
