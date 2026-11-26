@@ -135,3 +135,41 @@ describe("sem dados (CA04)", () => {
     expect(progresso(null)).toEqual({ feitos: 0, total: 28 });
   });
 });
+
+// RAFA-247 CA03: a chave do agrupamento vai para NFC. Escapes explícitos para
+// o editor não normalizar os nomes de teste.
+const NFC = "Vôlei";
+const NFD = "Vôlei";
+
+describe("RAFA-247: Vôlei em NFC e em NFD numa linha só", () => {
+  it("os nomes de teste são mesmo NFC e NFD", () => {
+    expect(NFC).not.toBe(NFD);
+    expect(NFD.normalize("NFC")).toBe(NFC);
+  });
+
+  it("NFC e NFD somam numa única linha", () => {
+    const r = horas([reg(NFD, 1, "2026-11-22"), reg(NFC, 1.5, "2026-11-24")]);
+    expect(r.livres).toEqual([{ nome: NFC, horas: 2.5 }]);
+  });
+
+  it('"Volei", sem acento, continua em linha separada', () => {
+    const r = horas([reg(NFC, 1, "2026-11-22"), reg(NFD, 1, "2026-11-23"), reg("Volei", 0.5, "2026-11-24")]);
+    expect(r.livres).toEqual([
+      { nome: NFD, horas: 2 },
+      { nome: "Volei", horas: 0.5 },
+    ]);
+  });
+
+  it("os registros guardados não são reescritos", () => {
+    const storage = memoria();
+    adicionar(storage, { data: "2026-11-22", nome: NFD, horas: 1 });
+    adicionar(storage, { data: "2026-11-23", nome: NFC, horas: 1 });
+    const guardado = storage.getItem(KEY);
+    const lidas = carregar(storage);
+    const copia = structuredClone(lidas);
+    expect(horas(lidas).livres).toHaveLength(1);
+    expect(lidas).toEqual(copia);
+    expect(lidas.map((a) => a.nome)).toEqual([NFD, NFC]);
+    expect(storage.getItem(KEY)).toBe(guardado);
+  });
+});

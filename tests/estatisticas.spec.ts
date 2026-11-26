@@ -190,3 +190,32 @@ test("RAFA-229 CA02: o histórico mostra cada registro como foi guardado", async
   expect(await page.evaluate((chave) => localStorage.getItem(chave), ATIVIDADES)).toBe(guardado);
   await semRolagemEAlvos(page);
 });
+
+// RAFA-247 CA03: "Vôlei" em NFC e em NFD (o + U+0302) somam numa linha só;
+// "Volei", sem acento, segue separado e os registros guardados ficam intactos.
+// Escapes explícitos para o editor não normalizar os nomes.
+const NFC = "Vôlei";
+const NFD = "Vôlei";
+const UNICODE = () => [reg(NFD, 1, "2026-11-22"), reg("Volei", 0.5, "2026-11-23"), reg(NFC, 1.5, D)];
+
+test("RAFA-247 CA03: Vôlei em NFC e em NFD numa linha, Volei separado", async ({ page }) => {
+  await abrir(page, { [ATIVIDADES]: UNICODE() });
+  await expect(livres(page)).toHaveText([/^Vôlei\s*2,5 h$/, /^Volei\s*0,5 h$/]);
+  // Rótulo do registro mais recente, como foi guardado (NFC).
+  expect(await livres(page).first().evaluate((li) => li.querySelector("span")!.textContent)).toBe(NFC);
+  await semRolagemEAlvos(page);
+});
+
+test("RAFA-247 CA03: os registros guardados em NFC e NFD não são reescritos", async ({ page }) => {
+  const semeados = UNICODE();
+  await abrir(page, { [ATIVIDADES]: semeados });
+  await expect(livres(page)).toHaveCount(2);
+  const guardado = JSON.stringify(semeados);
+  expect(await page.evaluate((chave) => localStorage.getItem(chave), ATIVIDADES)).toBe(guardado);
+  await tab(page, "Registro");
+  const lista = page.getByTestId("atividades").getByRole("listitem");
+  await page.getByRole("textbox", { name: "Data", exact: true }).fill("2026-11-22");
+  await expect(lista).toHaveCount(1);
+  expect(await lista.evaluateAll((itens) => itens.map((li) => li.querySelector("span")!.textContent))).toEqual([NFD]);
+  expect(await page.evaluate((chave) => localStorage.getItem(chave), ATIVIDADES)).toBe(guardado);
+});
