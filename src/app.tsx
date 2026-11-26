@@ -90,12 +90,14 @@ function lerSalvo(): Salvo {
   }
 }
 
-// CA03-B3: plano salvo que não pode ser lido. Pede confirmação, guarda o
-// conteúdo inválido em backup e começa um plano novo hoje.
-// Bari r1: o segundo gesto de um toque duplo, dblclick ou Enter repetido não
-// pode cair no Confirmar. No estado de confirmação o lugar do Recomeçar fica
-// com o título, o foco vai para o Cancelar e o Confirmar fica por último.
-function RecomecarPlano({ onRecomecado }: { onRecomecado: (plano: Plano) => void }) {
+// Ação destrutiva com confirmação: Recomeçar plano (CA03-B3 da RAFA-183) e
+// Recomeçar anotações de dor (CA03 da RAFA-228). `onConfirmar` guarda o
+// conteúdo inválido em backup e grava o novo; se lançar, aparece o alerta.
+// Bari r1 (lição 12): o segundo gesto de um toque duplo, dblclick ou Enter
+// repetido não pode cair no Confirmar. No estado de confirmação o lugar do
+// gatilho fica com o título, o foco vai para o Cancelar e o Confirmar fica por
+// último.
+function Recomecar({ acao, tituloId, onConfirmar }: { acao: string; tituloId: string; onConfirmar: () => void }) {
   const [confirmando, setConfirmando] = useState(false);
   const [error, setError] = useState("");
   const recomecarRef = useRef<HTMLButtonElement>(null);
@@ -111,15 +113,15 @@ function RecomecarPlano({ onRecomecado }: { onRecomecado: (plano: Plano) => void
   return (
     <>
       {confirmando ? (
-        <section className={CARD} aria-labelledby="recomecar-titulo">
-          <h2 id="recomecar-titulo" className="text-title-3-semibold">
-            Recomeçar plano?
+        <section className={CARD} aria-labelledby={tituloId}>
+          <h2 id={tituloId} className="text-title-3-semibold">
+            {acao}?
           </h2>
           <Button
             ref={cancelarRef}
             className="min-h-11"
             variant="secondary"
-            aria-describedby="recomecar-titulo"
+            aria-describedby={tituloId}
             onClick={() => {
               voltarFoco.current = true;
               setConfirmando(false);
@@ -131,7 +133,7 @@ function RecomecarPlano({ onRecomecado }: { onRecomecado: (plano: Plano) => void
             className="min-h-11"
             onClick={() => {
               try {
-                onRecomecado(planoLocal.recomecar(localStorage, hoje()));
+                onConfirmar();
                 setError("");
               } catch {
                 setError(ERRO_DISPOSITIVO);
@@ -144,12 +146,24 @@ function RecomecarPlano({ onRecomecado }: { onRecomecado: (plano: Plano) => void
       ) : (
         <div className={CARD}>
           <Button ref={recomecarRef} className="min-h-11" onClick={() => setConfirmando(true)}>
-            Recomeçar plano
+            {acao}
           </Button>
         </div>
       )}
       {error && <p role="alert">{error}</p>}
     </>
+  );
+}
+
+// CA03-B3: plano salvo que não pode ser lido. Guarda o conteúdo inválido em
+// backup e começa um plano novo hoje.
+function RecomecarPlano({ onRecomecado }: { onRecomecado: (plano: Plano) => void }) {
+  return (
+    <Recomecar
+      acao="Recomeçar plano"
+      tituloId="recomecar-titulo"
+      onConfirmar={() => onRecomecado(planoLocal.recomecar(localStorage, hoje()))}
+    />
   );
 }
 
@@ -331,8 +345,21 @@ function PlanoTela({
 }
 
 // CA01 (RAFA-176): atividade do dia com data, nome e horas, salva no aparelho.
-function Registro({ atividades, onSaved }: { atividades: Atividade[]; onSaved: (lista: Atividade[]) => void }) {
-  const [data, setData] = useState(() => hoje());
+// CA01 (RAFA-228): sem data escolhida à mão, o campo acompanha o dia do
+// aparelho e o Salvar grava o dia do toque; a data escolhida à mão fica.
+function Registro({
+  atividades,
+  dia,
+  onDia,
+  onSaved,
+}: {
+  atividades: Atividade[];
+  dia: string;
+  onDia: (dia: string) => void;
+  onSaved: (lista: Atividade[]) => void;
+}) {
+  const [escolhida, setEscolhida] = useState<string | null>(null);
+  const data = escolhida ?? dia;
   const [nome, setNome] = useState("");
   const [horas, setHoras] = useState("");
   const [error, setError] = useState("");
@@ -345,8 +372,10 @@ function Registro({ atividades, onSaved }: { atividades: Atividade[]; onSaved: (
           event.preventDefault();
           const valor = parseHoras(horas);
           if (valor === null || !nome.trim() || !data) return;
+          const gravar = escolhida ?? hoje();
+          if (escolhida === null) onDia(gravar);
           try {
-            onSaved(adicionar(localStorage, { data, nome, horas: valor }));
+            onSaved(adicionar(localStorage, { data: gravar, nome, horas: valor }));
             setNome("");
             setHoras("");
             setError("");
@@ -355,7 +384,7 @@ function Registro({ atividades, onSaved }: { atividades: Atividade[]; onSaved: (
           }
         }}
       >
-        <Input label="Data" type="date" value={data} onChange={setData} isRequired />
+        <Input label="Data" type="date" value={data} onChange={setEscolhida} isRequired />
         <Input
           label="Atividade"
           value={nome}
@@ -443,7 +472,16 @@ function Estatisticas({ atividades, plano }: { atividades: Atividade[]; plano: P
 
 // CA04 (RAFA-176), CA04-1 a CA04-4 (RAFA-184): dor ou desconforto do dia, com
 // ícones da lista fixa e/ou texto livre, e o histórico dos dias com dor.
-function Dor({ dores, onSaved }: { dores: Anotacao[]; onSaved: (lista: Anotacao[]) => void }) {
+// CA03 (RAFA-228): chave de dor ilegível mostra Recomeçar anotações de dor.
+function Dor({
+  dores,
+  ilegivel,
+  onSaved,
+}: {
+  dores: Anotacao[];
+  ilegivel: boolean;
+  onSaved: (lista: Anotacao[]) => void;
+}) {
   const [data, setData] = useState(() => hoje());
   const [icones, setIcones] = useState<string[]>([]);
   const [texto, setTexto] = useState("");
@@ -456,6 +494,16 @@ function Dor({ dores, onSaved }: { dores: Anotacao[]; onSaved: (lista: Anotacao[
   };
   return (
     <>
+      {ilegivel && (
+        <Recomecar
+          acao="Recomeçar anotações de dor"
+          tituloId="recomecar-dor-titulo"
+          onConfirmar={() => {
+            onSaved(dorLocal.recomecar(localStorage));
+            setError("");
+          }}
+        />
+      )}
       <form
         className={CARD}
         onSubmit={(event) => {
@@ -563,11 +611,11 @@ export function App() {
       return [];
     }
   });
-  const [dores, setDores] = useState<Anotacao[]>(() => {
+  const [dor, setDor] = useState<{ anotacoes: Anotacao[]; ilegivel: boolean }>(() => {
     try {
-      return dorLocal.carregar(localStorage);
+      return dorLocal.ler(localStorage);
     } catch {
-      return [];
+      return { anotacoes: [], ilegivel: false };
     }
   });
   const [salvo, setSalvo] = useState<Salvo>(lerSalvo);
@@ -599,9 +647,15 @@ export function App() {
         }}
       />
     ),
-    registro: <Registro atividades={atividades} onSaved={setAtividades} />,
+    registro: <Registro atividades={atividades} dia={dia} onDia={setDia} onSaved={setAtividades} />,
     plano: <PlanoTela salvo={salvo} dia={dia} onIniciado={setPlano} />,
-    dor: <Dor dores={dores} onSaved={setDores} />,
+    dor: (
+      <Dor
+        dores={dor.anotacoes}
+        ilegivel={dor.ilegivel}
+        onSaved={(anotacoes) => setDor({ anotacoes, ilegivel: false })}
+      />
+    ),
     estatisticas: <Estatisticas atividades={atividades} plano={salvo.plano} />,
     // CA06-3 (RAFA-186): só a linha da limitação do iOS, sem botão nem opção (D2).
     lembretes: (

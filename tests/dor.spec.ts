@@ -205,3 +205,226 @@ test("conteúdo salvo ilegível não é sobrescrito e mostra o alerta de disposi
   await expect(page.getByRole("alert")).toHaveText("Não foi possível salvar neste dispositivo.");
   expect(await lerDor(page)).toBe("{");
 });
+
+// CA03 (RAFA-228): chave de dor ilegível, Recomeçar anotações de dor com
+// confirmação (lição 12) e backup antes de gravar a lista nova.
+const recomecar = (page: Page) => page.getByRole("button", { name: "Recomeçar anotações de dor", exact: true });
+const tituloConfirmacao = (page: Page) =>
+  page.getByRole("heading", { level: 2, name: "Recomeçar anotações de dor?" });
+const backupsDor = (page: Page) =>
+  page.evaluate(
+    (k) =>
+      Object.keys(localStorage)
+        .filter((c) => c.startsWith(`${k}:backup:`))
+        .map((c) => localStorage.getItem(c)),
+    KEY_DOR,
+  );
+async function abrirIlegivel(page: Page, bruto = "{") {
+  await abrir(page);
+  await page.evaluate(([k, v]) => localStorage.setItem(k, v), [KEY_DOR, bruto]);
+  await page.reload();
+  await expect(recomecar(page)).toBeVisible();
+}
+async function nadaRecomecado(page: Page) {
+  expect(await lerDor(page)).toBe("{");
+  expect(await backupsDor(page)).toEqual([]);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+}
+
+test("CA03: chave ilegível mostra Recomeçar anotações de dor ao abrir, sem alerta e sem apagar", async ({ page }) => {
+  for (const bruto of ["{", '{"a":1}']) {
+    await abrirIlegivel(page, bruto);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    expect(await lerDor(page)).toBe(bruto);
+    expect(await backupsDor(page)).toEqual([]);
+  }
+  await semRolagemEAlvos(page);
+  const box = (await recomecar(page).boundingBox())!;
+  expect(box.height).toBeGreaterThanOrEqual(44);
+});
+
+test("CA03: lista legível não mostra Recomeçar anotações de dor", async ({ page }) => {
+  await abrir(page);
+  await expect(recomecar(page)).toHaveCount(0);
+  await page.evaluate((k) => localStorage.setItem(k, "[]"), KEY_DOR);
+  await page.reload();
+  await expect(page.getByText("Nenhuma dor", { exact: true })).toBeVisible();
+  await expect(recomecar(page)).toHaveCount(0);
+});
+
+test("CA03: Recomeçar pede confirmação e Cancelar não grava nada", async ({ page }) => {
+  await abrirIlegivel(page);
+  await recomecar(page).click();
+  await expect(tituloConfirmacao(page)).toBeVisible();
+  await expect(page.getByRole("region", { name: "Recomeçar anotações de dor?" })).toBeVisible();
+  for (const alvo of await page.locator("main button").all()) {
+    const box = (await alvo.boundingBox())!;
+    expect(box.height).toBeGreaterThanOrEqual(44);
+  }
+  const cancelar = page.getByRole("button", { name: "Cancelar", exact: true });
+  await expect(cancelar).toHaveAccessibleDescription("Recomeçar anotações de dor?");
+  await nadaRecomecado(page);
+  await cancelar.click();
+  await expect(recomecar(page)).toBeVisible();
+  await nadaRecomecado(page);
+});
+
+test("CA03: confirmar guarda o conteúdo ilegível em backup e grava a lista nova", async ({ page }) => {
+  await abrirIlegivel(page);
+  await recomecar(page).click();
+  await page.getByRole("button", { name: "Confirmar", exact: true }).click();
+  await expect(recomecar(page)).toHaveCount(0);
+  await expect(tituloConfirmacao(page)).toHaveCount(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(await backupsDor(page)).toEqual(["{"]);
+  expect(await lerDor(page)).toBe("[]");
+  await anotar(page, HOJE, ["Outro"]);
+  await expect(dias(page)).toHaveText([/^24\/11\/2026\s*Outro$/]);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.reload();
+  await expect(recomecar(page)).toHaveCount(0);
+  await expect(dias(page)).toHaveText([/^24\/11\/2026\s*Outro$/]);
+});
+
+test("CA03: depois do alerta de dispositivo no Salvar, recomeçar tira a tela do alerta", async ({ page }) => {
+  await abrirIlegivel(page);
+  await anotar(page, HOJE, ["Outro"]);
+  await expect(page.getByRole("alert")).toHaveText("Não foi possível salvar neste dispositivo.");
+  expect(await lerDor(page)).toBe("{");
+  await recomecar(page).click();
+  await page.getByRole("button", { name: "Confirmar", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(await backupsDor(page)).toEqual(["{"]);
+  await salvar(page).click();
+  await expect(dias(page)).toHaveText([/^24\/11\/2026\s*Outro$/]);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+// Lição 12: o segundo gesto nunca confirma e o foco volta ao gatilho.
+test("CA03: dblclick no Recomeçar anotações de dor não confirma", async ({ page }) => {
+  await abrirIlegivel(page);
+  await recomecar(page).dblclick();
+  await expect(tituloConfirmacao(page)).toBeVisible();
+  await nadaRecomecado(page);
+});
+
+test("CA03: dois toques rápidos no Recomeçar anotações de dor não confirmam", async ({ page }) => {
+  await abrirIlegivel(page);
+  const box = (await recomecar(page).boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.touchscreen.tap(x, y);
+  await page.waitForTimeout(150);
+  await page.touchscreen.tap(x, y);
+  await expect(tituloConfirmacao(page)).toBeVisible();
+  await nadaRecomecado(page);
+});
+
+test("CA03: Enter duas vezes no Recomeçar anotações de dor não confirma", async ({ page }) => {
+  await abrirIlegivel(page);
+  await recomecar(page).focus();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await nadaRecomecado(page);
+});
+
+test("CA03: Cancelar devolve o foco ao Recomeçar anotações de dor", async ({ page }) => {
+  await abrirIlegivel(page);
+  await recomecar(page).click();
+  const cancelar = page.getByRole("button", { name: "Cancelar", exact: true });
+  await expect(cancelar).toBeFocused();
+  await cancelar.click();
+  await expect(recomecar(page)).toBeFocused();
+});
+
+// CA05 e L1 da RAFA-228: cota simulada no navegador. "backup" recusa as chaves
+// de backup; "lista" recusa a chave da lista; null volta ao normal. Também
+// registra a ordem das gravações em window.__gravadas.
+async function cota(page: Page, regra: "backup" | "lista" | null) {
+  await page.evaluate((r) => {
+    const w = window as unknown as { __falha: string | null; __gravadas: string[]; __original?: Storage["setItem"] };
+    w.__falha = r;
+    if (w.__original) return;
+    w.__gravadas = [];
+    const original = Storage.prototype.setItem;
+    w.__original = original;
+    Storage.prototype.setItem = function (k: string, v: string) {
+      const backup = k.includes(":backup:");
+      if ((w.__falha === "backup" && backup) || (w.__falha === "lista" && !backup))
+        throw new DOMException("cota", "QuotaExceededError");
+      w.__gravadas.push(k);
+      return original.call(this, k, v);
+    };
+  }, regra);
+}
+const gravadas = (page: Page) => page.evaluate(() => (window as unknown as { __gravadas: string[] }).__gravadas);
+
+const confirmar = (page: Page) => page.getByRole("button", { name: "Confirmar", exact: true });
+const backupsComChave = (page: Page) =>
+  page.evaluate((k) => {
+    const chaves = Object.keys(localStorage).filter((c) => c.startsWith(`${k}:backup:`)).sort();
+    return chaves.map((c) => [c, localStorage.getItem(c)] as const);
+  }, KEY_DOR);
+
+test("CA05 na dor: sem espaço para o backup, alerta e chave intacta, sem travar", async ({ page }) => {
+  await abrirIlegivel(page);
+  await cota(page, "backup");
+  await recomecar(page).click();
+  await confirmar(page).click();
+  await expect(page.getByRole("alert")).toHaveText("Não foi possível salvar neste dispositivo.");
+  expect(await lerDor(page)).toBe("{");
+  expect(await backupsDor(page)).toEqual([]);
+  // A tela não trava: a confirmação continua com Cancelar e Confirmar ativos.
+  await expect(page.getByRole("button", { name: "Cancelar", exact: true })).toBeEnabled();
+  await cota(page, null);
+  await confirmar(page).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(recomecar(page)).toHaveCount(0);
+  expect(await backupsDor(page)).toEqual(["{"]);
+  expect(await lerDor(page)).toBe("[]");
+});
+
+test("CA05 na dor: depois do alerta, Cancelar volta ao Recomeçar sem gravar", async ({ page }) => {
+  await abrirIlegivel(page);
+  await cota(page, "backup");
+  await recomecar(page).click();
+  await confirmar(page).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(recomecar(page)).toBeFocused();
+  expect(await lerDor(page)).toBe("{");
+  expect(await backupsDor(page)).toEqual([]);
+});
+
+test("L1 na dor: nova tentativa depois de a lista falhar não duplica o backup", async ({ page }) => {
+  await abrirIlegivel(page);
+  await cota(page, "lista");
+  await recomecar(page).click();
+  await confirmar(page).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.clock.setFixedTime(new Date(`${HOJE}T10:01:00`));
+  await confirmar(page).click();
+  expect(await lerDor(page)).toBe("{");
+  expect(await backupsDor(page)).toEqual(["{"]);
+  await cota(page, null);
+  await confirmar(page).click();
+  await expect(recomecar(page)).toHaveCount(0);
+  expect(await backupsDor(page)).toEqual(["{"]);
+  expect(await lerDor(page)).toBe("[]");
+});
+
+test("L2 na dor: colisão de instante usa o sufixo e o backup vem antes da lista nova", async ({ page }) => {
+  const longo = `{${"x".repeat(5000)}`;
+  await abrirIlegivel(page, longo);
+  await page.evaluate((k) => localStorage.setItem(`${k}:backup:${new Date().toISOString()}`, "anterior"), KEY_DOR);
+  await cota(page, null);
+  await recomecar(page).click();
+  await confirmar(page).click();
+  await expect(recomecar(page)).toHaveCount(0);
+  const base = `${KEY_DOR}:backup:${await page.evaluate(() => new Date().toISOString())}`;
+  expect(await backupsComChave(page)).toEqual([
+    [base, "anterior"],
+    [`${base}-2`, longo],
+  ]);
+  expect(await gravadas(page)).toEqual([`${base}-2`, KEY_DOR]);
+});

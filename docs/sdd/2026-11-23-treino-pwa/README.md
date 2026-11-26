@@ -1,4 +1,4 @@
-# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182, RAFA-183, RAFA-184, RAFA-185 e RAFA-186
+# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182, RAFA-183, RAFA-184, RAFA-185, RAFA-186 e RAFA-228
 
 ## Spec
 
@@ -305,3 +305,39 @@ Notificação push e servidor de push (RAFA-179); lembrete com horário, som, vi
 ### Gates
 
 `npm run check` com HOME falso (`rafa186-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.
+
+## RAFA-228: virada do dia e dados locais inválidos
+
+Issue: [RAFA-228](https://linear.app/rafagg/issue/RAFA-228/ajustar-virada-do-dia-e-proteger-dados-locais-invalidos-no-registro-e). Contrato: [CA01 a CA03 do card da RAFA-228](https://linear.app/rafagg/issue/RAFA-228/ajustar-virada-do-dia-e-proteger-dados-locais-invalidos-no-registro-e), sem reescrita. Follow-up da RAFA-182 ([treino-pwa#6](https://github.com/rafaeugenio/treino-pwa/pull/6)), com a chave de dor da RAFA-184 e a regra da RAFA-183: vale o dia do aparelho e nenhum dado se perde em silêncio. Card mãe: [RAFA-176](https://linear.app/rafagg/issue/RAFA-176/criar-pwa-pessoal-de-treino-e-calistenia).
+
+### Design
+
+- CA01: a tela Registro recebe o dia do aparelho de `useHoje` (o mesmo de Início e Plano) e guarda só a data escolhida à mão. Enquanto o campo Data não foi mexido, ele mostra o dia de `useHoje` e o Salvar grava `hoje()` no instante do toque, atualizando o dia da tela; assim o registro novo aparece na lista do dia novo. Depois que o campo Data muda pela mão, essa data é mantida, inclusive depois da meia-noite. A tela Dor não muda.
+- CA02: `adicionar()` em `src/lib/atividades.ts` separa, na lista salva, as entradas que passam em `valida` das que não passam. Havendo inválidas, copia essas entradas (JSON da lista delas) para `treino-pwa:atividades:v1:backup:<instante ISO>` antes de regravar a chave; só então grava as válidas mais o registro novo. Se o backup falhar, a chave fica como estava e aparece o alerta de dispositivo. Vale também para o Feito do Início, que grava a atividade pelo mesmo `adicionar()`.
+- Chave de backup: `src/lib/backup.ts` monta a chave com o instante e, se ela já existir, usa o sufixo `-2`, `-3` e assim por diante, sem sobrescrever, no mesmo formato do `recomecar` do plano (CA03-B3). `src/lib/plano.ts` não muda.
+- CA04 ([card da RAFA-228](https://linear.app/rafagg/issue/RAFA-228/ajustar-virada-do-dia-e-proteger-dados-locais-invalidos-no-registro-e), opção (b) do Mane em 25/11/2026 04:48, que fecha a pergunta aberta da primeira entrega): quando o conteúdo de `treino-pwa:atividades:v1` não é lista JSON (JSON inválido ou outro valor), `adicionar()` copia o conteúdo bruto para uma chave nova de `chaveBackup` com o prefixo `treino-pwa:atividades:v1:backup:` antes de gravar a lista com o registro novo. Backup já existente fica intacto (sufixo `-2`, `-3`); com outro conteúdo, o bruto novo vai para uma chave livre. Chave ausente ou vazia não gera backup. Sem alerta e sem Recomeçar: o Recomeçar fica só na dor (CA03). Se o backup falhar, vale o CA05.
+- CA05 ([card da RAFA-228](https://linear.app/rafagg/issue/RAFA-228/ajustar-virada-do-dia-e-proteger-dados-locais-invalidos-no-registro-e), decisão do Mane em 25/11/2026 05:10 a partir da review Bari 6053878946): exceção aos CA02, CA03 e CA04. Se o backup exigido não pode ser gravado (cota cheia, por exemplo), `adicionar()` e `recomecar()` da dor lançam antes de gravar a lista nova, e a chave antiga fica intacta. A tela reusa o alerta `Não foi possível salvar neste dispositivo.`; no Registro o formulário continua editável e um novo Salvar com sucesso tira o alerta; no Recomeçar anotações de dor a confirmação continua aberta, com Cancelar e Confirmar ativos. Vale só para o Salvar do Registro e o Confirmar do Recomeçar anotações de dor: o Recomeçar plano e `src/lib/plano.ts` não mudam.
+- L1 (review Bari 6053878946): o backup não ganha duplicata de mesmo conteúdo. `guardarBackup()` em `src/lib/backup.ts` procura, entre as chaves do mesmo prefixo, uma com exatamente o mesmo texto; se achar, reaproveita e não grava outra. Cobre a nova tentativa depois de um backup gravado e de uma gravação da lista que falhou. Com outro conteúdo, continua a chave nova de `chaveBackup`, sem sobrescrever.
+- `treino-pwa:registro:v1` continua sem migração.
+- CA03: `ler()` em `src/lib/dor.ts` devolve as anotações válidas e marca a chave como ilegível quando o conteúdo salvo não é lista (JSON inválido ou outro formato). Com a chave ilegível, a tela Dor mostra, acima do formulário, o Button `Recomeçar anotações de dor`. A confirmação segue o `Recomeçar plano` e a lição 12: o título `Recomeçar anotações de dor?` (h2) ocupa o lugar do botão, o foco vai para `Cancelar` (descrito pelo título) e `Confirmar` fica por último; Cancelar devolve o foco ao gatilho e nada é gravado. Confirmar chama `recomecar()`: copia o conteúdo ilegível para `treino-pwa:dor:v1:backup:<instante ISO>` e só depois grava a lista nova, vazia. O alerta de dispositivo de um Salvar anterior some ao recomeçar, e a tela volta a gravar normalmente.
+- O componente de confirmação passou a ser um só (`Recomecar` em `src/app.tsx`), usado pelo plano e pela dor, com o mesmo texto, ids e comportamento do plano.
+
+### Fora desta entrega
+
+Tela para ver, editar ou restaurar backup; migração de `treino-pwa:registro:v1`; mudanças no plano de 28 dias (RAFA-183); data da tela Dor na virada do dia; o teste de arredondamento dos centésimos do B1 da treino-pwa#9.
+
+### Tarefas
+
+- [x] SDD desta seção antes do código.
+- [x] `src/lib/backup.ts`; `adicionar()` com backup das entradas inválidas e testes em `src/lib/atividades.test.ts` (item inválido, campo ausente, tipo errado, backup antes da regravação, backup sem sobrescrever, falha do backup sem regravar).
+- [x] `ler()` e `recomecar()` da dor com testes em `src/lib/dor.test.ts`.
+- [x] Registro com a data do dia do aparelho e Recomeçar anotações de dor em `src/app.tsx`.
+- [x] `tests/registro.spec.ts` e `tests/dor.spec.ts` (WebKit iPhone 15 e Chromium, 390×844, relógio do Playwright): virada do dia, data manual mantida, backup das inválidas com as válidas e o registro novo visíveis, Recomeçar anotações de dor (abertura sem alerta, confirmação, Cancelar sem gravar, backup, saída do alerta) e lição 12 (dblclick, dois toques com 150 ms, Enter duplo, foco de volta ao gatilho).
+- [x] CA04: backup do conteúdo bruto que não é lista em `adicionar()`, com testes em `src/lib/atividades.test.ts` (não é lista, backup inexistente, backup existente com o mesmo conteúdo, backup existente com outro conteúdo, registro novo visível) e Playwright em `tests/registro.spec.ts`.
+- [x] CA05 e L1: `guardarBackup()` sem duplicata, falha do backup sem gravar a lista em atividades e dor, testes Vitest (JSON inválido, não lista, colisão de instante, cota cheia, nova tentativa) e Playwright no Registro e na dor (alerta, chave intacta, tela sem travar, nova tentativa sem duplicata, colisão de instante com sufixo, ordem backup antes da lista).
+- [x] Prova de vermelho de cada guarda nova (virada do dia, data manual, entradas inválidas, ordem e sufixo do backup, chave de dor ilegível, saída do alerta e lição 12), registrada no Verification do PR.
+- [ ] Revisão no head exato e merge pelo responsável.
+
+### Gates
+
+`npm run check` com HOME falso (`rafa228-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.
