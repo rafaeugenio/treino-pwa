@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 
 // CA04 (RAFA-176), CA04-1 a CA04-4 da RAFA-184: dor ou desconforto do dia na
 // tela Dor e o histórico dos dias com dor, com o "hoje" do relógio do Playwright.
@@ -473,6 +473,140 @@ test("RAFA-247 CA02: com o CA05 da RAFA-228, nada é gravado e a confirmação s
   expect((await gravadas(page)).length).toBe(antes);
   await expect(tituloConfirmacao(page)).toBeVisible();
   await expect(page.getByRole("button", { name: "Cancelar", exact: true })).toBeEnabled();
+  await expect(confirmar(page)).toBeEnabled();
+  await cota(page, null);
+  await confirmar(page).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(recomecar(page)).toHaveCount(0);
+  expect(await backupsDor(page)).toEqual(["{"]);
+  expect(await lerDor(page)).toBe("[]");
+});
+
+// RAFA-251 CA01: a tela Dor tem um único role=alert, o do erro mais recente.
+// Cancelar a confirmação faz o Recomeçar limpar o próprio erro; o erro do
+// Salvar fica até outra ação do usuário o resolver ou um erro novo o
+// substituir. A chave ilegível faz o Salvar falhar; a cota faz o Confirmar
+// falhar. O CA05 da RAFA-228 e a via (a) da RAFA-247 seguem valendo.
+const alertaDoSalvar = (page: Page) => page.locator('section[aria-label="Histórico"] + p[role="alert"]');
+const botaoCancelar = (page: Page) => page.getByRole("button", { name: "Cancelar", exact: true });
+async function erroDoRecomecar(page: Page) {
+  await abrirIlegivel(page);
+  await cota(page, "backup");
+  await recomecar(page).click();
+  await confirmar(page).click();
+  await expect(alertaDoRecomecar(page)).toHaveText(ERRO);
+  await expect(page.getByRole("alert")).toHaveCount(1);
+}
+// Conta os role=alert a cada mudança do DOM e guarda o máximo, para pegar
+// também um estado intermediário com dois alertas.
+async function contarAlertas(page: Page) {
+  await page.evaluate(() => {
+    const w = window as unknown as { __maxAlertas: number };
+    const contar = () => {
+      w.__maxAlertas = Math.max(w.__maxAlertas, document.querySelectorAll('[role="alert"]').length);
+    };
+    w.__maxAlertas = 0;
+    contar();
+    new MutationObserver(contar).observe(document.body, { childList: true, subtree: true, attributes: true });
+  });
+}
+const maxAlertas = (page: Page) => page.evaluate(() => (window as unknown as { __maxAlertas: number }).__maxAlertas);
+
+test("RAFA-251 CA01: Cancelar limpa o erro do Recomeçar", async ({ page }) => {
+  await erroDoRecomecar(page);
+  await botaoCancelar(page).click();
+  await expect(recomecar(page)).toBeFocused();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByText(ERRO)).toHaveCount(0);
+  expect(await lerDor(page)).toBe("{");
+  expect(await backupsDor(page)).toEqual([]);
+});
+
+test("RAFA-251 CA01: Salvar que falha com o erro do Recomeçar visível deixa só o alerta do Salvar", async ({
+  page,
+}) => {
+  await erroDoRecomecar(page);
+  await anotar(page, HOJE, ["Outro"]);
+  await expect(page.getByRole("alert")).toHaveCount(1);
+  await expect(alertaDoSalvar(page)).toHaveText(ERRO);
+  await expect(alertaDoRecomecar(page)).toHaveCount(0);
+  // A confirmação segue aberta e nada foi gravado.
+  await expect(tituloConfirmacao(page)).toBeVisible();
+  expect(await lerDor(page)).toBe("{");
+  expect(await backupsDor(page)).toEqual([]);
+});
+
+test("RAFA-251 CA01: a tela Dor nunca mostra mais de um role=alert", async ({ page }) => {
+  await abrirIlegivel(page);
+  await contarAlertas(page);
+  const umAlerta = async (local: (page: Page) => Locator) => {
+    await expect(local(page)).toHaveText(ERRO);
+    await expect(page.getByRole("alert")).toHaveCount(1);
+  };
+  await anotar(page, HOJE, ["Outro"]);
+  await umAlerta(alertaDoSalvar);
+  await recomecar(page).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await cota(page, "backup");
+  await confirmar(page).click();
+  await umAlerta(alertaDoRecomecar);
+  await salvar(page).click();
+  await umAlerta(alertaDoSalvar);
+  await confirmar(page).click();
+  await umAlerta(alertaDoRecomecar);
+  await botaoCancelar(page).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await salvar(page).click();
+  await umAlerta(alertaDoSalvar);
+  await recomecar(page).click();
+  await confirmar(page).click();
+  await umAlerta(alertaDoRecomecar);
+  expect(await maxAlertas(page)).toBe(1);
+});
+
+test("RAFA-251 CA01: nenhum erro some sem ação do usuário ou sem ser substituído", async ({ page }) => {
+  await abrirIlegivel(page);
+  // Erro do Salvar: o tempo e mexer no formulário não o tiram da tela.
+  await anotar(page, HOJE, ["Outro"]);
+  await expect(alertaDoSalvar(page)).toHaveText(ERRO);
+  await page.waitForTimeout(1000);
+  await icone(page, "Dor muscular").click();
+  await texto(page).fill("coxa");
+  await expect(alertaDoSalvar(page)).toHaveText(ERRO);
+  // Erro do Recomeçar: também fica com o tempo.
+  await recomecar(page).click();
+  await cota(page, "backup");
+  await confirmar(page).click();
+  await expect(alertaDoRecomecar(page)).toHaveText(ERRO);
+  await page.waitForTimeout(1000);
+  await expect(alertaDoRecomecar(page)).toHaveText(ERRO);
+  // Substituído pelo erro do Salvar, que não sai com o Cancelar da confirmação.
+  await salvar(page).click();
+  await expect(alertaDoSalvar(page)).toHaveText(ERRO);
+  await botaoCancelar(page).click();
+  await expect(recomecar(page)).toBeFocused();
+  await expect(alertaDoSalvar(page)).toHaveText(ERRO);
+  await expect(page.getByRole("alert")).toHaveCount(1);
+});
+
+test("RAFA-251 CA01: CA05 da RAFA-228 e via (a) da RAFA-247 seguem valendo", async ({ page }) => {
+  await erroDoRecomecar(page);
+  await anotar(page, HOJE, ["Outro"]);
+  await expect(alertaDoSalvar(page)).toHaveText(ERRO);
+  await botaoCancelar(page).click();
+  // Via (a): abrir a confirmação limpa o erro da tela.
+  await recomecar(page).click();
+  await expect(tituloConfirmacao(page)).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  // CA05: sem espaço para o backup nada é gravado e a tela não trava.
+  const antes = (await gravadas(page)).length;
+  await confirmar(page).click();
+  await expect(alertaDoRecomecar(page)).toHaveText(ERRO);
+  await expect(page.getByRole("alert")).toHaveCount(1);
+  expect(await lerDor(page)).toBe("{");
+  expect(await backupsDor(page)).toEqual([]);
+  expect((await gravadas(page)).length).toBe(antes);
+  await expect(botaoCancelar(page)).toBeEnabled();
   await expect(confirmar(page)).toBeEnabled();
   await cota(page, null);
   await confirmar(page).click();
