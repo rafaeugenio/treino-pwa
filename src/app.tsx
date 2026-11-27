@@ -98,20 +98,32 @@ function lerSalvo(): Salvo {
 // gatilho fica com o título, o foco vai para o Cancelar e o Confirmar fica por
 // último.
 // RAFA-247 CA02, via (a): onAbrir avisa a tela que a confirmação abriu, para a
-// tela limpar o próprio erro; o Recomecar não lê nem altera o estado da tela.
+// tela limpar o próprio erro.
+// RAFA-251 CA01: com onErro, o erro do Recomecar mora na tela (modo
+// controlado), para a tela ter um único alerta, o mais recente; onCancelar
+// avisa a tela que a confirmação fechou, para ela limpar o erro do Recomecar.
+// Sem onErro, o Recomecar guarda o próprio erro, como antes.
 function Recomecar({
   acao,
   tituloId,
   onConfirmar,
   onAbrir,
+  erro,
+  onErro,
+  onCancelar,
 }: {
   acao: string;
   tituloId: string;
   onConfirmar: () => void;
   onAbrir?: () => void;
+  erro?: string;
+  onErro?: (erro: string) => void;
+  onCancelar?: () => void;
 }) {
   const [confirmando, setConfirmando] = useState(false);
-  const [error, setError] = useState("");
+  const [erroProprio, setErroProprio] = useState("");
+  const error = onErro ? (erro ?? "") : erroProprio;
+  const setError = onErro ?? setErroProprio;
   const recomecarRef = useRef<HTMLButtonElement>(null);
   const cancelarRef = useRef<HTMLButtonElement>(null);
   const voltarFoco = useRef(false);
@@ -137,6 +149,7 @@ function Recomecar({
             onClick={() => {
               voltarFoco.current = true;
               setConfirmando(false);
+              onCancelar?.();
             }}
           >
             Cancelar
@@ -505,7 +518,9 @@ function Dor({
   const [icones, setIcones] = useState<string[]>([]);
   const [texto, setTexto] = useState("");
   const [semDor, setSemDor] = useState(false);
-  const [error, setError] = useState("");
+  // RAFA-251 CA01: um único erro na tela, com a origem. Um erro novo substitui
+  // o anterior, então nunca há dois role=alert.
+  const [erro, setErro] = useState<{ texto: string; origem: "salvar" | "recomecar" } | null>(null);
   const dias = historico(dores);
   const alternar = (id: string) => {
     setSemDor(false);
@@ -517,10 +532,13 @@ function Dor({
         <Recomecar
           acao="Recomeçar anotações de dor"
           tituloId="recomecar-dor-titulo"
-          onAbrir={() => setError("")}
+          onAbrir={() => setErro(null)}
+          erro={erro?.origem === "recomecar" ? erro.texto : ""}
+          onErro={(texto) => setErro(texto ? { texto, origem: "recomecar" } : null)}
+          onCancelar={() => setErro((atual) => (atual?.origem === "recomecar" ? null : atual))}
           onConfirmar={() => {
             onSaved(dorLocal.recomecar(localStorage));
-            setError("");
+            setErro(null);
           }}
         />
       )}
@@ -537,9 +555,9 @@ function Dor({
             onSaved(dorLocal.adicionar(localStorage, { data, icones, texto }));
             setIcones([]);
             setTexto("");
-            setError("");
+            setErro(null);
           } catch {
-            setError(ERRO_DISPOSITIVO);
+            setErro({ texto: ERRO_DISPOSITIVO, origem: "salvar" });
           }
         }}
       >
@@ -607,7 +625,7 @@ function Dor({
           <p className="text-body-regular text-text-secondary">Nenhuma dor</p>
         )}
       </section>
-      {error && <p role="alert">{error}</p>}
+      {erro?.origem === "salvar" && <p role="alert">{erro.texto}</p>}
     </>
   );
 }

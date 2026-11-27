@@ -193,10 +193,17 @@ test("RAFA-229 CA02: o histórico mostra cada registro como foi guardado", async
 
 // RAFA-247 CA03: "Vôlei" em NFC e em NFD (o + U+0302) somam numa linha só;
 // "Volei", sem acento, segue separado e os registros guardados ficam intactos.
-// Escapes explícitos para o editor não normalizar os nomes.
-const NFC = "Vôlei";
-const NFD = "Vôlei";
+// RAFA-251 CA02: os nomes vêm de escapes \u, que o editor não normaliza, e o
+// teste abaixo confere que são mesmo NFC e NFD, como o Vitest.
+const NFC = "V\u00f4lei";
+const NFD = "Vo\u0302lei";
 const UNICODE = () => [reg(NFD, 1, "2026-11-22"), reg("Volei", 0.5, "2026-11-23"), reg(NFC, 1.5, D)];
+
+test("RAFA-251 CA02: os nomes de teste são mesmo NFC e NFD", () => {
+  expect(NFC).not.toBe(NFD);
+  expect(NFD.normalize("NFC")).toBe(NFC);
+  expect(NFC.normalize("NFD")).toBe(NFD);
+});
 
 test("RAFA-247 CA03: Vôlei em NFC e em NFD numa linha, Volei separado", async ({ page }) => {
   await abrir(page, { [ATIVIDADES]: UNICODE() });

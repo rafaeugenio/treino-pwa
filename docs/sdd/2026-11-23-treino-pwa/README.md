@@ -1,4 +1,4 @@
-# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182, RAFA-183, RAFA-184, RAFA-185, RAFA-186, RAFA-228, RAFA-229 e RAFA-247
+# Treino PWA: SDD das RAFA-180, RAFA-181, RAFA-182, RAFA-183, RAFA-184, RAFA-185, RAFA-186, RAFA-228, RAFA-229, RAFA-247 e RAFA-251
 
 ## Spec
 
@@ -395,3 +395,31 @@ Settings do projeto na Vercel (versão do Node lá), só com OK direto do Rafael
 ### Gates
 
 `npm run check` com HOME falso e Node 22 (`RAFA-247-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.
+
+## RAFA-251: alerta único na Dor e teste NFD do Playwright
+
+Issue: [RAFA-251](https://linear.app/rafagg/issue/RAFA-251/corrigir-alerta-duplicado-inverso-na-dor-e-o-teste-nfd-do-playwright). Contrato: [CA01 e CA02 do card da RAFA-251](https://linear.app/rafagg/issue/RAFA-251/corrigir-alerta-duplicado-inverso-na-dor-e-o-teste-nfd-do-playwright), sem reescrita, com as decisões do Mane no card (comentário 2ce56bc2). Follow-up das duas observações não bloqueantes do Bari na r1 do treino-pwa#13 ([RAFA-247](https://linear.app/rafagg/issue/RAFA-247/corrigir-observacoes-nao-bloqueantes-do-bari-no-treino-pwa)). O comportamento de gravação já entregue não muda.
+
+### Design
+
+- CA01: a tela Dor passa a ter um único estado de erro, com a origem (`salvar` ou `recomecar`). O `Recomecar` de `src/app.tsx` ganha um modo controlado opcional (`erro`, `onErro` e `onCancelar`): quando a tela passa `onErro`, o erro do Recomeçar mora na tela e o `Recomecar` só o mostra no lugar de sempre, logo abaixo da confirmação. O Recomeçar plano não passa nada e continua com o próprio erro, sem mudança.
+- Um erro novo substitui o anterior no mesmo estado, então só o mais recente aparece e nunca há dois `role=alert`. O alerta do Salvar segue no fim da tela; o do Recomeçar, abaixo da confirmação. Textos e layout não mudam.
+- Cancelar a confirmação limpa o erro só quando ele é do Recomeçar. O erro do Salvar só sai com outra ação do usuário que o resolva ou o substitua (Salvar com sucesso, abrir a confirmação pela via (a) da RAFA-247, Confirmar com sucesso ou um erro novo).
+- A via (a) da RAFA-247 segue: abrir a confirmação limpa o erro da tela. O CA05 da RAFA-228 segue: sem backup nada é gravado e a confirmação continua com Cancelar e Confirmar ativos.
+- CA02: em `tests/estatisticas.spec.ts`, `NFC` e `NFD` passam a ser escritos com escapes `\u` reais (`V\u00f4lei` e `Vo\u0302lei`), um teste próprio afirma `NFC !== NFD`, `NFD.normalize("NFC") === NFC` e `NFC.normalize("NFD") === NFD`, como o Vitest, e o comentário descreve o que o arquivo faz. O app, `horas()` e o agrupamento não mudam.
+
+### Fora desta entrega
+
+Textos dos alertas, outras telas e outros testes, Settings do projeto na Vercel, `vercel.json` e qualquer mudança de comportamento de gravação, inclusive o CA05 da RAFA-228. Nenhuma confirmação destrutiva nova.
+
+### Tarefas
+
+- [x] SDD desta seção antes do código.
+- [x] CA01: erro único da Dor com origem e o modo controlado do `Recomecar`, com testes em `tests/dor.spec.ts` (Cancelar limpa o erro do Recomeçar, Salvar que falha com o erro do Recomeçar visível deixa só o alerta do Salvar, nunca dois `role=alert` medido por MutationObserver, erro que não some sozinho, CA05 da RAFA-228 e via (a) da RAFA-247).
+- [x] CA02: escapes `\u` e a checagem `NFC !== NFD` em `tests/estatisticas.spec.ts`.
+- [x] Prova de vermelho de cada guarda nova no Verification do PR.
+- [ ] Revisão no head exato e merge pelo responsável.
+
+### Gates
+
+`npm run check` com HOME falso e Node 22 (`RAFA-251-autor-env.cmd`): oxlint, tsc -b, Vitest, build e Playwright em WebKit iPhone 15 e Chromium, viewport 390×844. Prova de vermelho de cada guarda nova, resultados e exit codes na seção Verification do PR.
